@@ -1,0 +1,107 @@
+{
+  "theme": "Light",
+  "archetype": "Archetype 1: Organic & Earthy (Professional Corporate Variant)",
+  "reasoning": "This is an HR induction portal. Users (often non-technical site workers or subcontractors) need to feel trust, clarity, and ease when handling sensitive data like medical history. A light theme with deep forest green accents provides an authoritative yet approachable feel, replacing harsh clinical tech colors with natural, grounded tones.",
+  "typography": {
+    "font_strategy": "The 'Soft Utility' - Professional Sans-Serif",
+    "heading_font": "Cabinet Grotesk",
+    "body_font": "IBM Plex Sans",
+    "scales": {
+      "h1": "text-3xl sm:text-4xl tracking-tight leading-tight",
+      "h2": "text-2xl sm:text-3xl tracking-tight",
+      "h3": "text-xl font-medium",
+      "body": "text-base leading-relaxed",
+      "small": "text-sm text-[#57534E]",
+      "overline": "text-xs uppercase tracking-[0.15em] font-semibold text-[#57534E]"
+    }
+  },
+  "colors": {
+    "background": {
+      "default": "#FAFAF9", 
+      "surface": "#FFFFFF",
+      "glass": "bg-white/80 backdrop-blur-xl"
+    },
+    "text": {
+      "primary": "#1C1917",
+      "secondary": "#57534E",
+      "disabled": "#A8A29E"
+    },
+    "brand": {
+      "primary": "#166534", 
+      "primary_hover": "#14532D",
+      "primary_active": "#14532D",
+      "accent": "#059669"
+    },
+    "status": {
+      "success": "#10B981",
+      "error": "#EF4444",
+      "error_bg": "#FEF2F2",
+      "border": "#E7E5E4"
+    }
+  },
+  "spacing_and_layout": {
+    "strategy": "Mobile-first, generous padding, vertical flow with sticky progress header.",
+    "container_padding": "p-4 sm:p-6 lg:p-8",
+    "gap": "gap-6",
+    "radius": {
+      "card": "rounded-2xl",
+      "button": "rounded-xl",
+      "input": "rounded-lg"
+    }
+  },
+  "components": {
+    "progress_bar": {
+      "description": "Sticky at the top. 4px height indicator bar, filling from left to right with brand.primary color. Below the bar, show 'Section X of 3' text in small font to provide constant context."
+    },
+    "gate_screen": {
+      "description": "Full screen layout. Background uses the abstract geometric image with a blur. Center card is white, rounded-2xl, shadow-lg, containing the Access Code and Email inputs. Large primary button to enter."
+    },
+    "buttons": {
+      "primary": "bg-[#166534] text-white hover:bg-[#14532D] shadow-sm font-medium h-14 w-full text-lg (optimized for mobile touch)",
+      "secondary": "bg-white text-[#1C1917] border border-[#E7E5E4] hover:bg-[#FAFAF9] font-medium h-14 w-full text-lg",
+      "yes_no_pill": "flex-1 h-14 border border-[#E7E5E4] rounded-xl flex items-center justify-center font-medium transition-colors cursor-pointer data-[state=active]:bg-[#166534] data-[state=active]:text-white data-[state=active]:border-[#166534] data-[state=inactive]:bg-white data-[state=inactive]:text-[#57534E]"
+    },
+    "inputs": {
+      "text": "h-14 border-[#E7E5E4] bg-white focus:ring-2 focus:ring-[#166534]/20 focus:border-[#166534] text-base",
+      "file_upload": "min-h-[140px] border-2 border-dashed border-[#E7E5E4] rounded-xl flex flex-col items-center justify-center bg-[#FAFAF9] hover:bg-[#F5F5F4] transition-colors p-6 cursor-pointer text-center",
+      "signature_canvas": "h-48 border border-[#E7E5E4] rounded-xl bg-white w-full cursor-crosshair touch-none shadow-inner"
+    },
+    "toast": {
+      "description": "Auto-save indicator should be a subtle toast or fixed badge at bottom right/center. Green check icon, 'Progress saved', transient without blocking UI."
+    }
+  },
+  "media": {
+    "image_urls": {
+      "gate_background": {
+        "url": "https://images.unsplash.com/photo-1483959651481-dc75b89291f1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwyfHxhYnN0cmFjdCUyMGdlb21ldHJpYyUyMGJhY2tncm91bmQlMjBsaWdodCUyMGNsZWFufGVufDB8fHx8MTc4MDkwOTMxOHww&ixlib=rb-4.1.0&q=85",
+        "description": "Abstract light geometric background for the access code login screen."
+      },
+      "success_background": {
+        "url": "https://images.unsplash.com/photo-1454117096348-e4abbeba002c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMGdlb21ldHJpYyUyMGJhY2tncm91bmQlMjBsaWdodCUyMGNsZWFufGVufDB8fHx8MTc4MDkwOTMxOHww&ixlib=rb-4.1.0&q=85",
+        "description": "Clean, structured background for the final success/PDF download screen."
+      }
+    }
+  },
+  "icons": {
+    "library": "lucide-react",
+    "usage": "Use thick, readable icons (strokeWidth={2}). Needed: CheckCircle2 (success), UploadCloud (file upload), FileText (PDF), ChevronRight, ChevronLeft, Save (auto-save)."
+  },
+  "motion": {
+    "transitions": "transition-all duration-200 ease-in-out for buttons and inputs.",
+    "page_load": "Fade in sections using Framer Motion (opacity 0 to 1, y: 10 to 0) to avoid jarring transitions between the 3 steps."
+  },
+  "testing": {
+    "attributes": "All interactive elements MUST include a data-testid attribute (e.g., data-testid='submit-section-1-button', data-testid='yes-medical-q1')."
+  },
+  "instructions_to_main_agent": [
+    "Ensure 'mobile-first' means tap targets are large (min-h-14). Avoid small buttons or links.",
+    "Replace standard radio buttons with large, tappable 'Pills' (flex-1 containers) for Yes/No questions (Medical & HAVS).",
+    "For the file uploader, implement validation logic (max 10MB, jpg/png/pdf) and show clear visual feedback on drop or select.",
+    "The signature section needs an actual drawing canvas (e.g., using react-signature-canvas) plus a standard text input for the typed legal name.",
+    "Use a sticky top bar for the Progress Indicator so the user always knows their context. Use a fixed div with top-0 and z-50.",
+    "Do not use generic fonts like Inter or Roboto. Use the specified fonts (Cabinet Grotesk for headings and IBM Plex Sans for body text).",
+    "Ensure all input labels are extremely clear and accessible, placed above the inputs.",
+    "Implement the autosave feature natively or mock it effectively with a visual toast notification on blur/change.",
+    "Add 'data-testid' to all buttons, inputs, and form controls for automated testing."
+  ]
+}
