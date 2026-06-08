@@ -1,0 +1,48 @@
+{
+  "summary": "Phase 3 admin routes backend test. New /api/admin/* suite at tests/test_admin_routes.py runs 21 cases against the live preview URL. 20/21 pass; Phase 2 regression (test_induction_finalize.py) still 10/10. One real backend defect found: WWW-Authenticate header lacks realm when no Authorization is supplied (returns 'Basic', not 'Basic realm=\"PNC Admin\"'). All core behaviour validated: Basic auth (correct/wrong creds), list shape, missing_documents == ['passport','driving_licence','bank_proof','signature'] (order preserved, insurance_certificate excluded for pnc coverage), completed_modules == ['induction'], CSV export (UTF-8 BOM EF BB BF, text/csv; charset=utf-8, Content-Disposition filename pattern, CRLF, exact header order matching CSV_COLUMNS, comma-space joins, no literal 'None'), all 7 search filters and AND-combination, impossible filter returns count=0, PATCH approved persists, PATCH 422 on invalid status, PATCH 404 on unknown id with detail 'employee_summary not found'. CRITICAL idempotency test PASSES: after PATCH approved, re-running POST /api/induction/finalize preserves review_status='approved' (does NOT reset to pending_review). First-time pending_review behaviour verified by code-path inspection of server.py finalize_induction guard as instructed by review_request.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/admin/employees (no Authorization header)",
+        "issue": "WWW-Authenticate response header is just 'Basic' — missing the required realm=\"PNC Admin\" parameter. The custom realm only fires when require_admin runs (i.e. when credentials are wrong); when no header is sent, FastAPI's HTTPBasic default response fires first without a realm. Fix: instantiate HTTPBasic(realm=\"PNC Admin\") instead of HTTPBasic() in /app/backend/admin_routes.py line 22. One-line change."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_admin_routes.py",
+    "/app/backend/tests/test_induction_finalize.py",
+    "/app/test_reports/pytest/admin_routes.xml",
+    "/app/test_reports/pytest/induction_finalize.xml"
+  ],
+  "action_items": [
+    "Fix WWW-Authenticate realm in /app/backend/admin_routes.py: replace `_basic = HTTPBasic()` with `_basic = HTTPBasic(realm=\"PNC Admin\")`. This is the only failing assertion (1/21) and matches the explicit bullet #1 of the review_request."
+  ],
+  "critical_code_review_comments": [
+    "admin_routes.py _basic = HTTPBasic() omits realm parameter — leads to a spec-violating 401 response when no Authorization header is provided. The custom realm in the require_admin HTTPException is unreachable in that scenario because FastAPI's HTTPBasic security shortcircuits with its own 401 first.",
+    "admin_routes.list_employees and export_employees_csv both iterate the entire employee_summary collection in Python (db.collection('employee_summary').stream()) and then filter in-memory. For HR scale this is fine, but it bypasses Firestore indexes. As soon as the collection grows, switch to server-side `.where(...)` for the equality filters (review_status, exact email/company) and keep the substring search client-side.",
+    "admin_routes.list_employees `if len(records) >= limit: break` is checked AFTER appending — correct behavior, but it short-circuits BEFORE sorting, so for a paged endpoint you may return a non-newest-first slice when total > limit. Consider full read then sort then slice, or order_by('submitted_at', direction=DESCENDING) at the Firestore query level.",
+    "_matches date_to comparison appends 'T23:59:59Z' to a user-supplied ISO date string and does lexicographic compare against `submitted_at`. Works if submitted_at is always 'YYYY-MM-DDTHH:MM:SS...Z'-style, but will misbehave with any other timezone suffix (e.g. '+00:00'). Consider parsing both sides with datetime.fromisoformat for robustness.",
+    "admin_routes._format_cell turns booleans into 'yes'/'no'. Fine for export, but the JSON list endpoint preserves raw bools — slight inconsistency between the two outputs. HR users diffing the JSON vs the CSV will see different representations for the same field.",
+    "ReviewIn.review_note has max_length=2000 but no min_length; passing an empty string sets the field to empty string in Firestore rather than leaving it untouched. Document that 'omit review_note to keep previous value, send empty string to clear'.",
+    "admin_routes.py CSV_COLUMNS is the source of truth but server.py _flatten_for_summary independently builds the same field set. A future column addition needs touching both files — consider deriving one from the other or adding a quick test that asserts every CSV_COLUMN (minus 'status'/'review_status'/'missing_documents'/'completed_modules'/'summary_generated_at') is producible by _flatten_for_summary."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_admin_routes.py"
+  ],
+  "success_rate": {
+    "backend": "96.7% admin (20/21) + 100% phase2 regression (10/10) = 96.8% overall (30/31)",
+    "frontend": "N/A (backend-only per review_request)"
+  },
+  "test_credentials": "Admin Basic Auth: pnc-admin / 7o0nSzhqwvS6lBfjwqqRnGOwmI8 (from /app/memory/test_credentials.md and /app/backend/.env). Test employee_id 0EApcMofHgM1BpaqraJQ.",
+  "seed_data_creation": "No new docs created. The test_admin_routes.py suite repeatedly POSTs /api/induction/finalize for 0EApcMofHgM1BpaqraJQ and PATCHes its employee_summary review_status. Teardown leaves review_status='approved' with review_note='post-test cleanup' so subsequent runs are deterministic. No documents added or deleted in Firestore.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase 3 admin suite: cd /app/backend && python -m pytest tests/test_admin_routes.py -v. Phase 2 regression: tests/test_induction_finalize.py. Both hit the public preview URL via REACT_APP_BACKEND_URL. After main agent applies the HTTPBasic(realm=\"PNC Admin\") fix, re-run test_admin_routes.py and confirm 21/21 pass. The PATCH-then-finalize idempotency test is in TestFinalizePreservesReviewStatus.test_finalize_does_not_overwrite_review_status and currently passes — DO NOT remove it; that is the most important Phase 3 behaviour. The teardown_module sets review_status back to 'approved'; if you need a clean pending_review state for manual testing, send a PATCH with {\"review_status\":\"pending_review\"} after the suite runs. CSV header row exact-match assertion uses an inline copy of CSV_COLUMNS — keep it in sync with /app/backend/admin_routes.py whenever columns change.",
+  "rca_of_the_issue": "WWW-Authenticate missing realm: FastAPI's fastapi.security.HTTPBasic emits 401 with header 'WWW-Authenticate: Basic' when auto_error=True and no Authorization header is supplied. The realm passed to HTTPException in require_admin is only used when require_admin actually runs (i.e. the user sent credentials that decode as Basic but compare_digest fails). For the no-header case, security shortcircuits before require_admin. Fix is one-liner: `_basic = HTTPBasic(realm=\"PNC Admin\")`. Reproduction: `curl -i https://induct-pro.preview.emergentagent.com/api/admin/employees` → currently shows `WWW-Authenticate: Basic`. After fix it will show `WWW-Authenticate: Basic realm=\"PNC Admin\"` per RFC 7617 and the review_request spec."
+}

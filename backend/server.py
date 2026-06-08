@@ -135,6 +135,16 @@ def _make_public_url(bucket, blob) -> str:
         return f"gs://{bucket.name}/{blob.name}"
 
 
+def _compute_missing_documents(emp: dict, files: dict) -> list[str]:
+    """Return a list of slots that should be present but aren't."""
+    required = ["passport", "driving_licence", "bank_proof"]
+    if (emp.get("insurance_option") or "").lower() == "own":
+        required.append("insurance_certificate")
+    # `signature` is always expected (drawn signature image)
+    required.append("signature")
+    return [slot for slot in required if not (files.get(slot) or {}).get("url")]
+
+
 def _flatten_for_summary(bundle: dict, pdf_url: str, employee_id: str) -> dict[str, Any]:
     """Denormalise everything into one doc that an HR person can read top-to-bottom
     or export as a CSV row."""
@@ -203,6 +213,9 @@ def _flatten_for_summary(bundle: dict, pdf_url: str, employee_id: str) -> dict[s
         "bank_proof_url": url_of("bank_proof"),
         "signature_url": url_of("signature"),
         "pdf_url": pdf_url,
+        # --- HR workflow / status (review_status is set on first create only)
+        "missing_documents": _compute_missing_documents(emp, files),
+        "completed_modules": ["induction"],
         # --- bookkeeping
         "summary_generated_at": now,
         "status": "completed",
@@ -284,8 +297,14 @@ async def finalize_induction(payload: FinalizeIn) -> FinalizeOut:
 
     # Create / overwrite the denormalised master HR record
     summary = _flatten_for_summary(bundle, pdf_url, employee_id)
+    summary_ref = db.collection("employee_summary").document(employee_id)
+    existing_summary = summary_ref.get()
+    if not existing_summary.exists or not (existing_summary.to_dict() or {}).get("review_status"):
+        # Set the HR-workflow status only on first creation so we don't overwrite
+        # an admin's later approval/rejection on re-finalize.
+        summary["review_status"] = "pending_review"
     # Use employee_id as the doc ID so it's idempotent and easy to look up
-    db.collection("employee_summary").document(employee_id).set(summary, merge=True)
+    summary_ref.set(summary, merge=True)
 
     return FinalizeOut(
         employee_id=employee_id,
@@ -300,6 +319,8 @@ async def finalize_induction(payload: FinalizeIn) -> FinalizeOut:
 # ---------------------------------------------------------------------------
 
 app.include_router(api_router)
+from admin_routes import admin_router  # noqa: E402
+app.include_router(admin_router)
 
 app.add_middleware(
     CORSMiddleware,
