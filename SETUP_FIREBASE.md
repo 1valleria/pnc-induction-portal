@@ -48,6 +48,12 @@ service cloud.firestore {
       allow create: if true;
       allow read, update, delete: if false;
     }
+
+    // employee_summary: admin-only (written by the backend via Admin SDK
+    // which bypasses rules; clients have no access).
+    match /employee_summary/{id} {
+      allow read, write: if false;
+    }
   }
 }
 ```
@@ -90,6 +96,15 @@ Document fields:
 
 You can create the document with the code as the document ID, or auto-ID — both work because the app queries by the `code` field.
 
-## 5. (Later) PDF generation
+## 5. PDF generation (Phase 2 — implemented)
 
-The portal saves all form data and uploads directly from the browser. The professional PDF will be generated server-side once the FastAPI backend stage is implemented. The Firebase Admin SDK credentials are already stored securely in `backend/.env` as `FIREBASE_SERVICE_ACCOUNT_B64`.
+After the form is submitted, the React app posts to `POST /api/induction/finalize` with the new `employee_id`. The FastAPI backend then:
+
+1. Reads `employees`, `medical_history`, `havs_questionnaires`, `employee_documents` for that employee.
+2. Downloads the drawn signature image from Storage and embeds it.
+3. Generates a professional A4 PDF (ReportLab) with personal, business, insurance, medical, HAVS, declaration, and uploaded-documents sections.
+4. Uploads the PDF to `employees/{employee_id}/pdf/induction-{employee_id}.pdf` and creates a stable download URL (token-based, no expiry).
+5. Writes `pdf_url` (and `pdf_path`, `pdf_generated_at`) back into the matching `employee_documents` doc.
+6. Creates/updates a denormalised **`employee_summary`** document keyed by `employee_id` — this is the **master HR record** that replaces the CSV workflow. It contains every key field plus the URLs of `passport`, `driving_licence`, `insurance_certificate`, `bank_proof`, `signature`, and `pdf`.
+
+The `employee_summary` collection is admin-only — clients cannot read or write it; only the FastAPI backend (via the Admin SDK) and you (via the Firebase Console) have access.

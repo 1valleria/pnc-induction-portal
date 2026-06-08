@@ -292,6 +292,22 @@ export default function Wizard() {
         console.warn("Failed to mark code used", err);
       }
 
+      // 8. Trigger server-side PDF generation + employee_summary (best-effort,
+      //    does not block the success screen if the backend is slow/unreachable)
+      const apiBase = process.env.REACT_APP_BACKEND_URL || "";
+      try {
+        const resp = await fetch(`${apiBase}/api/induction/finalize`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ employee_id: employeeId }),
+        });
+        if (!resp.ok) {
+          console.warn("PDF finalize returned", resp.status);
+        }
+      } catch (err) {
+        console.warn("PDF finalize failed (will be retried by HR)", err);
+      }
+
       clearProgress();
       sessionStorage.removeItem("pnc_session_v1");
       navigate(`/success?id=${employeeId}`, { replace: true });
