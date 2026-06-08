@@ -32,7 +32,15 @@ Production-ready, mobile-first digital induction portal that replaces the existi
 - Success screen at `/success` with reference ID (`Success.jsx`)
 - `SETUP_FIREBASE.md` — required Firestore + Storage rules and access-code seed instructions
 
-## Phase 2 — Server-side PDF + master HR record (2026-02-08)
+## Phase 3 — HR Export System (2026-02-08)
+- HTTP Basic Auth on `/api/admin/*` (`/app/backend/admin_routes.py`); creds in `backend/.env` (`ADMIN_USERNAME`, `ADMIN_PASSWORD`). 401 with `WWW-Authenticate: Basic realm="PNC Admin"` when missing/wrong.
+- `GET /api/admin/employees` — JSON list with AND-combined filters: `q` (name), `email`, `ni`, `company`, `review_status`, `date_from`, `date_to`, `limit`. Newest-first.
+- `GET /api/admin/employees.csv` — streaming Excel/Sheets-compatible CSV (UTF-8 BOM, CRLF), filename `pnc-employees-YYYYMMDD-HHMM.csv`. Supports the same filters.
+- `PATCH /api/admin/employees/{id}/review` — updates `review_status` (`pending_review` / `approved` / `rejected`) + optional `review_note`.
+- `employee_summary` now includes `review_status` (default `pending_review`, **preserved across re-finalize**), `missing_documents` (auto-computed from file presence + insurance choice), `completed_modules` (currently `["induction"]`).
+- `status` (system processing) and `review_status` (HR workflow) are kept separate per user request — clean future-proofing for HS forms / training records.
+- Tests: 21/21 admin + 10/10 Phase 2 regression pass on iteration 3 (`/app/backend/tests/test_admin_routes.py`, `test_induction_finalize.py`).
+- Credentials in `/app/memory/test_credentials.md`.
 - FastAPI endpoint `POST /api/induction/finalize` (`/app/backend/server.py`) — wired into the React submission flow as a best-effort post-submit call
 - `firebase_client.py` — initialises `firebase-admin` from `FIREBASE_SERVICE_ACCOUNT_B64`, returns Firestore + Storage clients
 - `pdf_generator.py` — ReportLab A4 PDF with branded header band, kicker labels, kv-tables, colour-coded Yes/No tables, embedded signature image, declaration block, uploaded-documents table, page footers

@@ -19,7 +19,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field
 
 admin_router = APIRouter(prefix="/api/admin")
-_basic = HTTPBasic()
+_basic = HTTPBasic(realm="PNC Admin")
 
 
 # ---------------------------------------------------------------------------
