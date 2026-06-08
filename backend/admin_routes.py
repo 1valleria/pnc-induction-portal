@@ -54,6 +54,7 @@ def require_admin(creds: HTTPBasicCredentials = Depends(_basic)) -> str:
 CSV_COLUMNS: list[str] = [
     # identity
     "employee_id",
+    "storage_folder_path",
     # status
     "status",
     "review_status",

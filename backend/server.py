@@ -135,6 +135,23 @@ def _make_public_url(bucket, blob) -> str:
         return f"gs://{bucket.name}/{blob.name}"
 
 
+def _resolve_storage_folder(documents_doc: dict, employee: dict, employee_id: str) -> tuple[str, bool]:
+    """Return (storage_folder_path, is_legacy).
+
+    - If employee_documents.storage_folder_path exists (new submissions) → use it.
+    - Otherwise the record was created BEFORE the folder-naming change. We
+      strictly preserve its legacy `employees/{employee_id}/` path so existing
+      records and their PDFs stay where HR/Firebase Console already finds them.
+    The `employee` argument is unused in legacy mode — kept for future
+    convenience (e.g. a one-time migration script).
+    """
+    explicit = (documents_doc or {}).get("storage_folder_path")
+    if explicit:
+        return (explicit if explicit.endswith("/") else explicit + "/"), False
+    # Legacy fallback — do NOT derive a new path for old records
+    return f"employees/{employee_id}/", True
+
+
 def _compute_missing_documents(emp: dict, files: dict) -> list[str]:
     """Return a list of slots that should be present but aren't."""
     required = ["passport", "driving_licence", "bank_proof"]
@@ -145,7 +162,7 @@ def _compute_missing_documents(emp: dict, files: dict) -> list[str]:
     return [slot for slot in required if not (files.get(slot) or {}).get("url")]
 
 
-def _flatten_for_summary(bundle: dict, pdf_url: str, employee_id: str) -> dict[str, Any]:
+def _flatten_for_summary(bundle: dict, pdf_url: str, employee_id: str, storage_folder_path: str) -> dict[str, Any]:
     """Denormalise everything into one doc that an HR person can read top-to-bottom
     or export as a CSV row."""
     emp = bundle["employee"] or {}
@@ -163,6 +180,7 @@ def _flatten_for_summary(bundle: dict, pdf_url: str, employee_id: str) -> dict[s
 
     summary = {
         "employee_id": employee_id,
+        "storage_folder_path": storage_folder_path,
         # --- personal
         "full_name": emp.get("full_name"),
         "dob": emp.get("dob"),
@@ -250,6 +268,11 @@ async def finalize_induction(payload: FinalizeIn) -> FinalizeOut:
     documents_meta = dict(bundle["documents"] or {})
     files = documents_meta.get("files") or {}
 
+    # Decide which Storage folder to use (explicit on new submissions, legacy for old).
+    storage_folder_path, is_legacy = _resolve_storage_folder(
+        documents_meta, bundle["employee"], employee_id
+    )
+
     # Best-effort: load the drawn signature so it can be embedded in the PDF.
     sig_bytes = _download_signature_bytes(bucket, files)
     if sig_bytes:
@@ -272,31 +295,45 @@ async def finalize_induction(payload: FinalizeIn) -> FinalizeOut:
         submitted_at=submitted_at,
     )
 
-    pdf_path = f"employees/{employee_id}/pdf/induction-{employee_id}.pdf"
+    # PDF goes inside the resolved Storage folder so it's grouped with the
+    # employee's other documents. Legacy records (no storage_folder_path) fall
+    # back to employees/{id}/pdf/ via _resolve_storage_folder.
+    pdf_path = f"{storage_folder_path}pdf/induction-{employee_id}.pdf"
     blob = bucket.blob(pdf_path)
     blob.upload_from_string(pdf_bytes, content_type="application/pdf")
     pdf_url = _make_public_url(bucket, blob)
 
-    # Update employee_documents.pdf_url for the existing record
+    # Update employee_documents.pdf_url for the existing record.
+    # For legacy records (created before the folder-naming change) we do NOT
+    # write storage_folder_path back — they keep their original shape.
     docs_doc_id = (bundle["documents"] or {}).get("__doc_id__")
+    update_payload: dict[str, Any] = {
+        "pdf_url": pdf_url,
+        "pdf_path": pdf_path,
+        "pdf_generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if not is_legacy:
+        update_payload["storage_folder_path"] = storage_folder_path
+
     if docs_doc_id:
-        db.collection("employee_documents").document(docs_doc_id).update(
-            {"pdf_url": pdf_url, "pdf_path": pdf_path, "pdf_generated_at": datetime.now(timezone.utc).isoformat()}
-        )
+        db.collection("employee_documents").document(docs_doc_id).update(update_payload)
     else:
         # Create one if it doesn't exist yet (should not normally happen)
-        db.collection("employee_documents").add(
-            {
-                "employee_id": employee_id,
-                "files": {},
-                "pdf_url": pdf_url,
-                "pdf_path": pdf_path,
-                "pdf_generated_at": datetime.now(timezone.utc).isoformat(),
-            }
-        )
+        new_doc: dict[str, Any] = {
+            "employee_id": employee_id,
+            "files": {},
+            **update_payload,
+        }
+        if not is_legacy:
+            new_doc["storage_folder_path"] = storage_folder_path
+        db.collection("employee_documents").add(new_doc)
 
     # Create / overwrite the denormalised master HR record
-    summary = _flatten_for_summary(bundle, pdf_url, employee_id)
+    summary = _flatten_for_summary(bundle, pdf_url, employee_id, storage_folder_path)
+    if is_legacy:
+        # Legacy records have no canonical folder path — leave the field empty
+        # in the summary so HR can tell them apart from new submissions.
+        summary["storage_folder_path"] = None
     summary_ref = db.collection("employee_summary").document(employee_id)
     existing_summary = summary_ref.get()
     if not existing_summary.exists or not (existing_summary.to_dict() or {}).get("review_status"):

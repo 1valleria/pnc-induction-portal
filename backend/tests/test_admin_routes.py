@@ -27,7 +27,8 @@ TIMEOUT = 60
 
 # CSV_COLUMNS mirror — kept in sync with /app/backend/admin_routes.py
 CSV_COLUMNS = [
-    "employee_id", "status", "review_status", "missing_documents", "completed_modules",
+    "employee_id", "storage_folder_path",
+    "status", "review_status", "missing_documents", "completed_modules",
     "submitted_at", "summary_generated_at",
     "full_name", "dob", "telephone", "email", "invited_email",
     "address1", "postcode", "ni_number",

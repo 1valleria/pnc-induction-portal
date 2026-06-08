@@ -32,6 +32,14 @@ Production-ready, mobile-first digital induction portal that replaces the existi
 - Success screen at `/success` with reference ID (`Success.jsx`)
 - `SETUP_FIREBASE.md` — required Firestore + Storage rules and access-code seed instructions
 
+## Storage folder rename (2026-02-08)
+- New submissions now upload under `employees/{slug(full_name)}-{employee_id}/` instead of the opaque `employees/{employee_id}/`. Slug rules: lowercase, accents stripped, non-alphanumeric removed, spaces collapsed to single `-`, trimmed.
+- The frontend computes `storage_folder_path` after creating the `employees/` doc and writes it into `employee_documents.storage_folder_path` (`/app/frontend/src/lib/upload.js`, `/app/frontend/src/pages/Wizard.jsx`).
+- The backend reads `storage_folder_path` from `employee_documents` on finalize; if missing (legacy records) it falls back **strictly** to `employees/{id}/` and does NOT migrate the legacy record. Legacy records keep their `employee_summary.storage_folder_path = None` so HR can identify them.
+- PDF location follows the same folder: `{storage_folder_path}pdf/induction-{id}.pdf`.
+- `storage_folder_path` is also exposed in the JSON list and CSV export (new column right after `employee_id`).
+- Tests updated: 31/31 pass (`/app/backend/tests/test_admin_routes.py` CSV header mirror + Phase 2 regression).
+
 ## Phase 3 — HR Export System (2026-02-08)
 - HTTP Basic Auth on `/api/admin/*` (`/app/backend/admin_routes.py`); creds in `backend/.env` (`ADMIN_USERNAME`, `ADMIN_PASSWORD`). 401 with `WWW-Authenticate: Basic realm="PNC Admin"` when missing/wrong.
 - `GET /api/admin/employees` — JSON list with AND-combined filters: `q` (name), `email`, `ni`, `company`, `review_status`, `date_from`, `date_to`, `limit`. Newest-first.

@@ -11,7 +11,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { uploadFile, uploadDataUrl } from "@/lib/upload";
+import { uploadFile, uploadDataUrl, buildStorageFolderPath } from "@/lib/upload";
 import { loadProgress, saveProgress, clearProgress } from "@/lib/autosave";
 import { ProgressHeader } from "@/components/ProgressHeader";
 import { SectionPersonal } from "@/components/sections/SectionPersonal";
@@ -237,6 +237,9 @@ export default function Wizard() {
       });
       const employeeId = employeeRef.id;
 
+      // Build the human-friendly Storage folder path (only used for new submissions).
+      const storageFolderPath = buildStorageFolderPath(data.full_name, employeeId);
+
       // 2. medical_history
       await addDoc(collection(db, "medical_history"), {
         employee_id: employeeId,
@@ -255,17 +258,20 @@ export default function Wizard() {
         submitted_at_server: serverTimestamp(),
       });
 
-      // 4. Uploads
+      // 4. Uploads — using human-friendly folder path
       const uploads = {};
-      if (files.passport) uploads.passport = await uploadFile(employeeId, "passport", files.passport);
-      if (files.driving_licence) uploads.driving_licence = await uploadFile(employeeId, "driving_licence", files.driving_licence);
-      if (files.bank_proof) uploads.bank_proof = await uploadFile(employeeId, "bank_proof", files.bank_proof);
+      if (files.passport)
+        uploads.passport = await uploadFile(storageFolderPath, "passport", files.passport);
+      if (files.driving_licence)
+        uploads.driving_licence = await uploadFile(storageFolderPath, "driving_licence", files.driving_licence);
+      if (files.bank_proof)
+        uploads.bank_proof = await uploadFile(storageFolderPath, "bank_proof", files.bank_proof);
       if (files.insurance_certificate)
-        uploads.insurance_certificate = await uploadFile(employeeId, "insurance", files.insurance_certificate);
+        uploads.insurance_certificate = await uploadFile(storageFolderPath, "insurance", files.insurance_certificate);
 
       // 5. Signature image
       const signatureRes = await uploadDataUrl(
-        employeeId,
+        storageFolderPath,
         "signature",
         data.signature_image_data_url,
         `signature_${employeeId}.png`
@@ -275,6 +281,7 @@ export default function Wizard() {
       // 6. employee_documents doc
       await addDoc(collection(db, "employee_documents"), {
         employee_id: employeeId,
+        storage_folder_path: storageFolderPath,
         files: uploads,
         pdf_url: null, // generated server-side later
         submitted_at: submittedAt,
