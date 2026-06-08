@@ -30,21 +30,29 @@ Production-ready, mobile-first digital induction portal that replaces the existi
 - Auto-save with `interactedRef` gate (no flash on initial load) + unique mobile/desktop "Progress saved" testids
 - Submission flow writes to all 4 Firestore collections, uploads 4 files + signature image to Storage, marks `access_codes` as used
 - Success screen at `/success` with reference ID (`Success.jsx`)
-- Firebase Admin SDK service account stored as base64 in `backend/.env` for the upcoming PDF stage
 - `SETUP_FIREBASE.md` — required Firestore + Storage rules and access-code seed instructions
 
+## Phase 2 — Server-side PDF + master HR record (2026-02-08)
+- FastAPI endpoint `POST /api/induction/finalize` (`/app/backend/server.py`) — wired into the React submission flow as a best-effort post-submit call
+- `firebase_client.py` — initialises `firebase-admin` from `FIREBASE_SERVICE_ACCOUNT_B64`, returns Firestore + Storage clients
+- `pdf_generator.py` — ReportLab A4 PDF with branded header band, kicker labels, kv-tables, colour-coded Yes/No tables, embedded signature image, declaration block, uploaded-documents table, page footers
+- PDF uploaded to `employees/{id}/pdf/induction-{id}.pdf` with token-based stable download URL
+- `employee_documents.pdf_url` (+ `pdf_path`, `pdf_generated_at`) updated
+- New `employee_summary/{employee_id}` collection — denormalised master HR record with every key field flat + all file URLs (passport, driving_licence, insurance_certificate, bank_proof, signature, pdf). Replaces the CSV workflow. Admin-only by Firestore rules; Admin SDK on the backend bypasses rules
+- Idempotent: re-running finalize overwrites the PDF at a deterministic path and merges into the same `employee_summary` doc
+- Test suite at `/app/backend/tests/test_induction_finalize.py` — 10/10 pass on iteration 2
+
 ## Prioritized backlog
-- **P0**
-  - Server-side PDF generation (FastAPI + reportlab) using the stored Admin SDK, upload to `employees/{id}/pdf/`, write URL to `employee_documents.pdf_url`
 - **P1**
-  - Email confirmation after submission (Resend / SendGrid)
-  - Optional admin-only `/api/access-codes/generate` endpoint to mint codes without using the Firebase Console
+  - Email confirmation after submission (Resend / SendGrid) — send the inductee a PDF receipt and notify HR.
+  - Optional admin-only `/api/access-codes/generate` endpoint to mint codes without using the Firebase Console.
 - **P2**
-  - CSV export endpoint that aggregates the 4 collections into a single master row per employee
-  - Re-upload / resume by access code on a different device
-  - Photo capture from the phone camera for passport/licence
-  - i18n (English + one second language)
-  - File preview thumbnails before submission
+  - Native CSV export endpoint that streams `employee_summary` as a downloadable CSV for spreadsheet workflows.
+  - Resume induction by access code on a different device.
+  - Photo capture (front camera) for passport / licence.
+  - i18n (English + one second language).
+  - File preview thumbnails before submission.
+  - Performance hardening on `/api/induction/finalize`: wrap ReportLab in `asyncio.to_thread`, drop the extra Storage round-trip in `_make_public_url`.
 
 ## Next tasks
 1. User confirms Firestore + Storage security rules from `SETUP_FIREBASE.md` are applied.
