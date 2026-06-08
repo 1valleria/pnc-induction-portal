@@ -32,6 +32,17 @@ Production-ready, mobile-first digital induction portal that replaces the existi
 - Success screen at `/success` with reference ID (`Success.jsx`)
 - `SETUP_FIREBASE.md` — required Firestore + Storage rules and access-code seed instructions
 
+## HR Admin Portal + PNC spreadsheet alignment (2026-02-08)
+- **Admin Portal** at `/admin` (`AdminLogin.jsx`) and `/admin/employees` (`AdminDashboard.jsx`) — gated by HTTP Basic Auth (same `ADMIN_USERNAME` / `ADMIN_PASSWORD` as backend). Credentials live in `sessionStorage` only.
+- Table layout mirrors PNC's existing subcontractor spreadsheet column order exactly: Name → Date Of Birth → Address → Post Code → Phone → Email → NI → Induction Status → Medical Status → Driving Licence → Driving Licence Check → Passport → Right To Work → Proof Of Bank → Business Name → Account No → Sort Code → VAT → UTR → Review Status → PDF Link.
+- Status pills (Complete / Awaiting Documents / Clear / Disclosed / Incomplete), Yes/No glyphs for DVLA, clickable "View" / "Open PDF" links for every document.
+- Inline `Review Status` dropdown — HR can mark Approved / Rejected / Pending Review without leaving the table (PATCH /api/admin/employees/{id}/review).
+- Top stats: Inductees, Pending Review, Approved, Awaiting Documents.
+- Search + review-state filter; "Export CSV" button downloads via the authenticated endpoint.
+- Backend derives `induction_status`, `medical_status`, `passport_status`, `driving_licence_status`, `bank_proof_status`, `insurance_certificate_status` on every finalize (`/app/backend/server.py`).
+- CSV now uses the same human-readable headers and same column order as the dashboard (`CSV_SCHEMA` in `/app/backend/admin_routes.py`). Value formatting tightened: DVLA → Yes/No, Review Status → "Pending Review" / "Approved" / "Rejected".
+- Tests updated (`/app/backend/tests/test_admin_routes.py`); 31/31 backend tests pass.
+
 ## Storage folder rename (2026-02-08)
 - New submissions now upload under `employees/{slug(full_name)}-{employee_id}/` instead of the opaque `employees/{employee_id}/`. Slug rules: lowercase, accents stripped, non-alphanumeric removed, spaces collapsed to single `-`, trimmed.
 - The frontend computes `storage_folder_path` after creating the `employees/` doc and writes it into `employee_documents.storage_folder_path` (`/app/frontend/src/lib/upload.js`, `/app/frontend/src/pages/Wizard.jsx`).

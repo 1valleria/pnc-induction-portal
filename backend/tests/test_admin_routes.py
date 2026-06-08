@@ -25,32 +25,17 @@ EXISTING_EMPLOYEE_ID = "0EApcMofHgM1BpaqraJQ"
 NONEXISTENT_EMPLOYEE_ID = "no-such-employee-zzz"
 TIMEOUT = 60
 
-# CSV_COLUMNS mirror — kept in sync with /app/backend/admin_routes.py
+# CSV header mirror — kept in sync with /app/backend/admin_routes.py CSV_SCHEMA.
+# This mirrors PNC's existing subcontractor spreadsheet column order.
 CSV_COLUMNS = [
-    "employee_id", "storage_folder_path",
-    "status", "review_status", "missing_documents", "completed_modules",
-    "submitted_at", "summary_generated_at",
-    "full_name", "dob", "telephone", "email", "invited_email",
-    "address1", "postcode", "ni_number",
-    "emergency_contact_name", "emergency_contact_phone", "emergency_contact_relationship",
-    "right_to_work_share_code", "dvla_check",
-    "company_name", "bank_account", "sort_code", "utr", "vat_number",
-    "insurance_option",
-    "medical_receiving_treatment", "medical_prescribed_medication",
-    "medical_medical_warning_card", "medical_pregnant", "medical_allergies",
-    "medical_asthma_bronchitis_chest", "medical_fainting_blackouts_epilepsy",
-    "medical_heart_problems", "medical_diabetes", "medical_bone_or_joint_disease",
-    "medical_skin_disease", "medical_persistent_bleeding_bruising",
-    "medical_liver_or_kidney_disease", "medical_havs_or_cts",
-    "medical_other_serious_illness",
-    "medical_if_yes_details", "medical_medication_disability_details",
-    "havs_tingling_after_vibration", "havs_tingling_other_times",
-    "havs_night_pain_tingling_numbness", "havs_finger_numbness_after_vibration",
-    "havs_fingers_white_in_cold", "havs_fingers_white_other_times",
-    "havs_muscle_or_joint_problems", "havs_difficulty_handling_small_objects",
-    "digital_signature_name", "access_code",
-    "passport_url", "driving_licence_url", "insurance_certificate_url",
-    "bank_proof_url", "signature_url", "pdf_url",
+    "Name", "Date Of Birth", "Address", "Post Code", "Phone Number",
+    "Email Address", "NI Number",
+    "Induction Status", "Medical Status",
+    "Driving Licence", "Driving Licence Check", "Passport",
+    "Right To Work", "Proof Of Bank",
+    "Business Name", "Account Number", "Sort Code", "VAT Number", "UTR",
+    "Review Status", "PDF Link",
+    "Employee ID", "Submitted At",
 ]
 
 
@@ -190,10 +175,9 @@ class TestCsvExport:
         lines = text.split("\r\n")
         header = lines[0].split(",")
 
-        # find row for our test employee
-        emp_idx = header.index("employee_id")
-        missing_idx = header.index("missing_documents")
-        completed_idx = header.index("completed_modules")
+        emp_idx = header.index("Employee ID")
+        dvla_idx = header.index("Driving Licence Check")
+        review_idx = header.index("Review Status")
 
         import csv as _csv
         reader = _csv.reader(lines[1:])
@@ -206,11 +190,11 @@ class TestCsvExport:
                 break
         assert row is not None, "Test employee row missing in CSV"
 
-        missing_cell = row[missing_idx]
-        completed_cell = row[completed_idx]
-        # Expected values
-        assert missing_cell == "passport, driving_licence, bank_proof, signature", missing_cell
-        assert completed_cell == "induction", completed_cell
+        # DVLA Licence Check value should be Yes/No (Title-cased), not "yes"/"no"
+        assert row[dvla_idx] in {"Yes", "No", ""}, f"Bad DVLA value: {row[dvla_idx]!r}"
+        # Review Status should be human-readable (e.g. "Pending Review")
+        assert row[review_idx] in {"Pending Review", "Approved", "Rejected", ""}, \
+            f"Bad review_status: {row[review_idx]!r}"
 
         # No literal 'None' in any cell
         for cell in row:

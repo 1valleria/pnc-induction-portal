@@ -162,6 +162,44 @@ def _compute_missing_documents(emp: dict, files: dict) -> list[str]:
     return [slot for slot in required if not (files.get(slot) or {}).get("url")]
 
 
+_MEDICAL_KEYS = [
+    "receiving_treatment", "prescribed_medication", "medical_warning_card",
+    "pregnant", "allergies", "asthma_bronchitis_chest",
+    "fainting_blackouts_epilepsy", "heart_problems", "diabetes",
+    "bone_or_joint_disease", "skin_disease", "persistent_bleeding_bruising",
+    "liver_or_kidney_disease", "havs_or_cts", "other_serious_illness",
+]
+
+
+def _compute_medical_status(med: dict) -> str:
+    """HR-friendly summary of the medical questionnaire.
+
+    Returns:
+        "Disclosed"  — at least one Yes (HR review recommended)
+        "Clear"      — every question answered No
+        "Incomplete" — at least one question missing an answer
+    """
+    answers = [med.get(k) for k in _MEDICAL_KEYS]
+    if any(a == "yes" for a in answers):
+        return "Disclosed"
+    if all(a == "no" for a in answers):
+        return "Clear"
+    return "Incomplete"
+
+
+def _compute_induction_status(missing_documents: list[str], pdf_url: str | None) -> str:
+    """High-level status mirroring the HR spreadsheet's "Induction Status" column."""
+    if missing_documents:
+        return "Awaiting Documents"
+    if not pdf_url:
+        return "Pending"
+    return "Complete"
+
+
+def _doc_status(url: str | None) -> str:
+    return "Uploaded" if url else "Missing"
+
+
 def _flatten_for_summary(bundle: dict, pdf_url: str, employee_id: str, storage_folder_path: str) -> dict[str, Any]:
     """Denormalise everything into one doc that an HR person can read top-to-bottom
     or export as a CSV row."""
@@ -204,13 +242,7 @@ def _flatten_for_summary(bundle: dict, pdf_url: str, employee_id: str, storage_f
         # --- insurance
         "insurance_option": emp.get("insurance_option"),
         # --- medical (yes/no answers)
-        **{f"medical_{k}": med.get(k) for k in [
-            "receiving_treatment", "prescribed_medication", "medical_warning_card",
-            "pregnant", "allergies", "asthma_bronchitis_chest",
-            "fainting_blackouts_epilepsy", "heart_problems", "diabetes",
-            "bone_or_joint_disease", "skin_disease", "persistent_bleeding_bruising",
-            "liver_or_kidney_disease", "havs_or_cts", "other_serious_illness",
-        ]},
+        **{f"medical_{k}": med.get(k) for k in _MEDICAL_KEYS},
         "medical_if_yes_details": med.get("if_yes_details"),
         "medical_medication_disability_details": med.get("medication_disability_details"),
         # --- havs
@@ -234,6 +266,17 @@ def _flatten_for_summary(bundle: dict, pdf_url: str, employee_id: str, storage_f
         # --- HR workflow / status (review_status is set on first create only)
         "missing_documents": _compute_missing_documents(emp, files),
         "completed_modules": ["induction"],
+        # --- derived statuses (HR-friendly, used by the admin portal + CSV)
+        "induction_status": _compute_induction_status(
+            _compute_missing_documents(emp, files), pdf_url
+        ),
+        "medical_status": _compute_medical_status(med),
+        "passport_status": _doc_status(url_of("passport")),
+        "driving_licence_status": _doc_status(url_of("driving_licence")),
+        "bank_proof_status": _doc_status(url_of("bank_proof")),
+        "insurance_certificate_status": _doc_status(url_of("insurance_certificate"))
+            if (emp.get("insurance_option") or "").lower() == "own"
+            else "N/A (covered by PNC)",
         # --- bookkeeping
         "summary_generated_at": now,
         "status": "completed",
