@@ -62,9 +62,15 @@ export default function AccessGate() {
       navigate("/induction");
     } catch (err) {
       console.error(err);
-      setError(
-        "We couldn't validate your code. Please check your connection and try again."
-      );
+      if (err && err.code === "permission-denied") {
+        setError(
+          "Firebase access is not configured yet. Please ask PNC IT to apply the Firestore security rules described in SETUP_FIREBASE.md."
+        );
+      } else {
+        setError(
+          "We couldn't validate your code. Please check your connection and try again."
+        );
+      }
       setLoading(false);
     }
   };
@@ -103,7 +109,7 @@ export default function AccessGate() {
             <Field label="Email Address" required>
               <TextInput
                 data-testid={GATE.emailInput}
-                type="email"
+                type="text"
                 inputMode="email"
                 autoComplete="email"
                 value={email}

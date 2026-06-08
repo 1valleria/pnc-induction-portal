@@ -20,12 +20,14 @@ Production-ready, mobile-first digital induction portal that replaces the existi
 ## What's been implemented (2026-02-08)
 - Firebase Web SDK init from env (`/app/frontend/src/lib/firebase.js`)
 - Access code gate at `/` validates code + email against `access_codes` (`AccessGate.jsx`)
+  - Custom JS email regex (no native HTML5 interception)
+  - Distinguishes `permission-denied` from network errors
 - 3-step wizard at `/induction` with sticky progress header, Framer Motion transitions
 - Section 1 — Personal/Business/Insurance with conditional insurance upload (`SectionPersonal.jsx`)
 - Section 2 — Medical (15 Q) + HAVS (8 Q) using Yes/No pill toggles (`SectionMedical.jsx`)
 - Section 3 — Declaration text + typed name + drawn signature canvas (`SectionSignature.jsx`, `SignaturePad.jsx`)
 - File dropzones with size/type validation (`FileDropzone.jsx`)
-- Auto-save with debounce + "Progress saved" badge (`autosave.js`)
+- Auto-save with `interactedRef` gate (no flash on initial load) + unique mobile/desktop "Progress saved" testids
 - Submission flow writes to all 4 Firestore collections, uploads 4 files + signature image to Storage, marks `access_codes` as used
 - Success screen at `/success` with reference ID (`Success.jsx`)
 - Firebase Admin SDK service account stored as base64 in `backend/.env` for the upcoming PDF stage

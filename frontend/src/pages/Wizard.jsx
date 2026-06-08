@@ -88,7 +88,7 @@ export default function Wizard() {
   const [savedAt, setSavedAt] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
-  const hydratedRef = useRef(true);
+  const interactedRef = useRef(false);
 
   useEffect(() => {
     if (!session) {
@@ -96,9 +96,9 @@ export default function Wizard() {
     }
   }, [session, navigate]);
 
-  // Auto-save on changes
+  // Auto-save on changes (only after the user has actually interacted)
   useEffect(() => {
-    if (!hydratedRef.current) return;
+    if (!interactedRef.current) return;
     const t = setTimeout(() => {
       saveProgress({ data, medical, havs, step });
       setSavedAt(Date.now());
@@ -106,10 +106,22 @@ export default function Wizard() {
     return () => clearTimeout(t);
   }, [data, medical, havs, step]);
 
-  const update = (patch) => setData((d) => ({ ...d, ...patch }));
-  const updateMedical = (patch) => setMedical((m) => ({ ...m, ...patch }));
-  const updateHavs = (patch) => setHavs((h) => ({ ...h, ...patch }));
-  const setFile = (key, f) => setFiles((prev) => ({ ...prev, [key]: f }));
+  const update = (patch) => {
+    interactedRef.current = true;
+    setData((d) => ({ ...d, ...patch }));
+  };
+  const updateMedical = (patch) => {
+    interactedRef.current = true;
+    setMedical((m) => ({ ...m, ...patch }));
+  };
+  const updateHavs = (patch) => {
+    interactedRef.current = true;
+    setHavs((h) => ({ ...h, ...patch }));
+  };
+  const setFile = (key, f) => {
+    interactedRef.current = true;
+    setFiles((prev) => ({ ...prev, [key]: f }));
+  };
 
   const validateStep = (s) => {
     const e = {};
@@ -299,7 +311,7 @@ export default function Wizard() {
       <div className="max-w-2xl mx-auto px-4 sm:px-6 pt-6">
         {savedAt && (
           <div
-            data-testid={WIZARD.savedBadge}
+            data-testid="wizard-saved-badge-mobile"
             className="sm:hidden mb-4 inline-flex items-center gap-1.5 text-xs text-[#166534] bg-[#F0FDF4] border border-[#BBF7D0] rounded-full px-3 py-1.5"
           >
             <Save className="h-3.5 w-3.5" /> Progress saved

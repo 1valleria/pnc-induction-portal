@@ -1,5 +1,4 @@
 import React from "react";
-import { WIZARD } from "@/constants/testIds";
 import { Save } from "lucide-react";
 
 const STEP_TITLES = [
@@ -18,7 +17,7 @@ export const ProgressHeader = ({ step, savedAt }) => {
           <div>
             <div
               className="text-[11px] uppercase tracking-[0.18em] font-semibold text-[#57534E]"
-              data-testid={WIZARD.progressLabel}
+              data-testid="wizard-progress-label"
             >
               Section {step + 1} of {total}
             </div>
@@ -29,7 +28,7 @@ export const ProgressHeader = ({ step, savedAt }) => {
           {savedAt && (
             <div
               className="hidden sm:flex items-center gap-1.5 text-xs text-[#166534] bg-[#F0FDF4] border border-[#BBF7D0] rounded-full px-3 py-1.5"
-              data-testid={WIZARD.savedBadge}
+              data-testid="wizard-saved-badge-desktop"
             >
               <Save className="h-3.5 w-3.5" strokeWidth={2.2} />
               Progress saved
