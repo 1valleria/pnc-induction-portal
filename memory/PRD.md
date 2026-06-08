@@ -32,6 +32,15 @@ Production-ready, mobile-first digital induction portal that replaces the existi
 - Success screen at `/success` with reference ID (`Success.jsx`)
 - `SETUP_FIREBASE.md` — required Firestore + Storage rules and access-code seed instructions
 
+## Invite Employee + email workflow (2026-02-08)
+- Backend: `POST /api/admin/invites` (Basic Auth) generates a unique `PNC-XXXX-XXXX` code, writes `access_codes` doc (code, email, full_name, used:false, employee_id:"", invited_at, invite_status), and — when `send_email=true` — sends a branded HTML email via Resend (`email_service.py`, `email_templates.py`). Returns the ready-to-paste plain-text invitation so HR can copy/paste into WhatsApp/SMS/Teams.
+- `GET /api/admin/invites` (Basic Auth) lists all invitations newest-first.
+- `PATCH /api/admin/employees/{id}/review` now also dispatches an Approval / Rejection email (with optional `review_note` shown to the inductee) on state transition. Idempotent: same `review_status` → no email re-sent.
+- Audit log: every email (sent, redirected, skipped, failed) is recorded in a new `email_logs` Firestore collection.
+- Resend secrets only in `backend/.env`: `RESEND_API_KEY`, `SENDER_EMAIL`, `RESEND_TEST_OVERRIDE_EMAIL` (test-mode delivery override, points at the Resend account owner until the PNC domain is verified), `PUBLIC_PORTAL_URL` (used as the link in the invitation).
+- Frontend: `Invite Employee` button in the Employees toolbar opens a modal (`/app/frontend/src/components/InviteModal.jsx`) with **Send Email** + **Just Create Code** buttons. After creation: shows the generated code, copy buttons for the code and the full invitation text, and a status banner indicating whether the email was actually delivered (including Resend test-mode redirect notice).
+- New `/admin/invitations` route (`AdminInvitations.jsx`) with table: Full Name, Email, Access Code, Invite Status (Sent / Code Only / Email Failed / Used), Used / Not Used pill, Invited At, Open record link when the invite has been used. Tabs nav between Employees and Invitations.
+
 ## HR Admin Portal + PNC spreadsheet alignment (2026-02-08)
 - **Admin Portal** at `/admin` (`AdminLogin.jsx`) and `/admin/employees` (`AdminDashboard.jsx`) — gated by HTTP Basic Auth (same `ADMIN_USERNAME` / `ADMIN_PASSWORD` as backend). Credentials live in `sessionStorage` only.
 - Table layout mirrors PNC's existing subcontractor spreadsheet column order exactly: Name → Date Of Birth → Address → Post Code → Phone → Email → NI → Induction Status → Medical Status → Driving Licence → Driving Licence Check → Passport → Right To Work → Proof Of Bank → Business Name → Account No → Sort Code → VAT → UTR → Review Status → PDF Link.

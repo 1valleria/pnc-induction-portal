@@ -234,12 +234,17 @@ def export_employees_csv(
 
 
 @admin_router.patch("/employees/{employee_id}/review", dependencies=[Depends(require_admin)])
-def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str, Any]:
+async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str, Any]:
+    from email_service import EmailSendError, send_email
+    from email_templates import approval, rejection
+
     db = _get_db()
     doc_ref = db.collection("employee_summary").document(employee_id)
     snap = doc_ref.get()
     if not snap.exists:
         raise HTTPException(status_code=404, detail="employee_summary not found")
+    rec = snap.to_dict() or {}
+    previous = rec.get("review_status")
     update = {
         "review_status": payload.review_status,
         "review_updated_at": datetime.now(timezone.utc).isoformat(),
@@ -247,4 +252,148 @@ def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str, Any]:
     if payload.review_note is not None:
         update["review_note"] = payload.review_note
     doc_ref.update(update)
-    return {"employee_id": employee_id, **update}
+
+    # Side-effect: notify inductee on approval / rejection transitions.
+    email_status: str | None = None
+    to = rec.get("email") or rec.get("invited_email")
+    if to and payload.review_status != previous and payload.review_status in {"approved", "rejected"}:
+        try:
+            if payload.review_status == "approved":
+                subject, html = approval(rec.get("full_name") or "")
+            else:
+                subject, html = rejection(rec.get("full_name") or "", payload.review_note)
+            result = await send_email(
+                db,
+                to=to,
+                subject=subject,
+                html=html,
+                purpose=f"review_{payload.review_status}",
+                employee_id=employee_id,
+            )
+            email_status = result.get("status")
+        except EmailSendError:
+            email_status = "failed"
+
+    return {"employee_id": employee_id, "email_status": email_status, **update}
+
+
+# ---------------------------------------------------------------------------
+# Invitations — create + list
+# ---------------------------------------------------------------------------
+
+
+def _generate_code() -> str:
+    """Generate a short, human-friendly access code: PNC-XXXX-XXXX (alphanumeric).
+    Avoid ambiguous characters (0, O, 1, I, L)."""
+    alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    def _block() -> str:
+        return "".join(secrets.choice(alphabet) for _ in range(4))
+    return f"PNC-{_block()}-{_block()}"
+
+
+def _new_unique_code(db) -> str:
+    for _ in range(8):
+        code = _generate_code()
+        existing = list(db.collection("access_codes").where("code", "==", code).limit(1).stream())
+        if not existing:
+            return code
+    raise HTTPException(status_code=500, detail="Could not generate a unique access code")
+
+
+class InviteIn(BaseModel):
+    full_name: str = Field(..., min_length=1, max_length=120)
+    email: str | None = Field(default=None, max_length=200)
+    send_email: bool = True
+
+
+@admin_router.post("/invites", dependencies=[Depends(require_admin)])
+async def create_invite(payload: InviteIn) -> dict[str, Any]:
+    from email_service import EmailSendError, send_email
+    from email_templates import invitation
+
+    db = _get_db()
+    code = _new_unique_code(db)
+    now = datetime.now(timezone.utc).isoformat()
+    portal_url = os.environ.get("PUBLIC_PORTAL_URL") or "https://induct-pro.emergent.host"
+    normalised_email = (payload.email or "").strip().lower() or None
+
+    doc_payload = {
+        "code": code,
+        "email": normalised_email,
+        "full_name": payload.full_name.strip(),
+        "used": False,
+        "employee_id": "",
+        "invited_at": now,
+        "invited_at_server": datetime.now(timezone.utc),
+        "invite_status": "sent" if (payload.send_email and normalised_email) else "created",
+        "delivery": None,
+    }
+    ref = db.collection("access_codes").document()
+    ref.set(doc_payload)
+
+    email_result: dict[str, Any] | None = None
+    if payload.send_email and normalised_email:
+        try:
+            subject, html = invitation(
+                full_name=payload.full_name.strip(),
+                portal_url=portal_url,
+                email=normalised_email,
+                code=code,
+            )
+            email_result = await send_email(
+                db,
+                to=normalised_email,
+                subject=subject,
+                html=html,
+                purpose="invitation",
+            )
+            ref.update({"delivery": email_result, "invite_status": "sent"})
+        except EmailSendError as exc:
+            ref.update({"invite_status": "failed", "delivery": {"status": "failed", "error": str(exc)}})
+            email_result = {"status": "failed"}
+
+    invite_text = (
+        "PNC Induction\n\n"
+        f"Hi {payload.full_name.strip()},\n\n"
+        "Please complete your induction:\n"
+        f"{portal_url}\n\n"
+        f"Email: {normalised_email or '(use your own email)'}\n"
+        f"Access Code: {code}\n"
+    )
+
+    return {
+        "id": ref.id,
+        "code": code,
+        "full_name": payload.full_name.strip(),
+        "email": normalised_email,
+        "portal_url": portal_url,
+        "invitation_text": invite_text,
+        "invite_status": "sent" if (payload.send_email and normalised_email and email_result and email_result.get("status") == "sent") else doc_payload["invite_status"],
+        "email_result": email_result,
+        "invited_at": now,
+    }
+
+
+@admin_router.get("/invites", dependencies=[Depends(require_admin)])
+def list_invites(limit: int = Query(default=500, ge=1, le=2000)) -> dict[str, Any]:
+    db = _get_db()
+    items: list[dict[str, Any]] = []
+    for doc in db.collection("access_codes").stream():
+        d = doc.to_dict() or {}
+        items.append(
+            {
+                "id": doc.id,
+                "code": d.get("code"),
+                "full_name": d.get("full_name"),
+                "email": d.get("email"),
+                "used": bool(d.get("used")),
+                "employee_id": d.get("employee_id") or None,
+                "invite_status": d.get("invite_status") or ("used" if d.get("used") else "created"),
+                "invited_at": d.get("invited_at"),
+                "used_at": d.get("used_at") if not hasattr(d.get("used_at"), "isoformat") else d["used_at"].isoformat(),
+                "delivery_status": (d.get("delivery") or {}).get("status") if isinstance(d.get("delivery"), dict) else None,
+            }
+        )
+    # newest invited_at first; fall back to created
+    items.sort(key=lambda r: (r.get("invited_at") or ""), reverse=True)
+    return {"count": len(items), "items": items[:limit]}

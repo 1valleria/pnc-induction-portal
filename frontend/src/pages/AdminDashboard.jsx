@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { adminFetch, clearCreds, downloadCsv, hasCreds } from "@/lib/adminAuth";
 import { TextInput } from "@/components/Field";
-import { Download, LogOut, RefreshCw, Search, ShieldCheck, ExternalLink, CheckCircle2, XCircle, Clock } from "lucide-react";
+import InviteModal from "@/components/InviteModal";
+import { Download, LogOut, RefreshCw, Search, ShieldCheck, ExternalLink, CheckCircle2, XCircle, Clock, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 // The exact column order PNC's existing subcontractor spreadsheet uses.
@@ -136,6 +137,7 @@ export default function AdminDashboard() {
   const [error, setError] = useState(null);
   const [q, setQ] = useState("");
   const [reviewFilter, setReviewFilter] = useState("");
+  const [showInvite, setShowInvite] = useState(false);
 
   useEffect(() => {
     if (!hasCreds()) {
@@ -237,7 +239,26 @@ export default function AdminDashboard() {
               Subcontractor database
             </div>
           </div>
+          <nav className="ml-6 hidden sm:flex items-center gap-1 text-sm">
+            <span className="px-3 py-1.5 rounded-lg bg-[#FAFAF9] text-[#1C1917] font-medium">
+              Employees
+            </span>
+            <Link
+              to="/admin/invitations"
+              data-testid="admin-nav-invitations"
+              className="px-3 py-1.5 rounded-lg text-[#57534E] hover:text-[#1C1917] hover:bg-[#FAFAF9]"
+            >
+              Invitations
+            </Link>
+          </nav>
           <div className="ml-auto flex items-center gap-2">
+            <button
+              data-testid="admin-invite-btn"
+              onClick={() => setShowInvite(true)}
+              className="h-9 px-3 inline-flex items-center gap-1.5 text-sm rounded-lg bg-[#166534] hover:bg-[#14532D] text-white"
+            >
+              <UserPlus className="h-3.5 w-3.5" /> Invite Employee
+            </button>
             <button
               data-testid="admin-refresh-btn"
               onClick={load}
@@ -248,7 +269,7 @@ export default function AdminDashboard() {
             <button
               data-testid="admin-csv-btn"
               onClick={handleCsv}
-              className="h-9 px-3 inline-flex items-center gap-1.5 text-sm rounded-lg bg-[#166534] hover:bg-[#14532D] text-white"
+              className="h-9 px-3 inline-flex items-center gap-1.5 text-sm rounded-lg border border-[#E7E5E4] bg-white hover:bg-[#FAFAF9] text-[#1C1917]"
             >
               <Download className="h-3.5 w-3.5" /> Export CSV
             </button>
@@ -366,6 +387,14 @@ export default function AdminDashboard() {
           <Link to="/" className="underline">Back to induction portal</Link>
         </div>
       </div>
+
+      <InviteModal
+        open={showInvite}
+        onClose={() => setShowInvite(false)}
+        onCreated={() => {
+          toast.success("Invitation recorded — see the Invitations tab to track delivery.");
+        }}
+      />
     </div>
   );
 }
