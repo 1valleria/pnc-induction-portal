@@ -1,0 +1,82 @@
+{
+  "summary": "Frontend-only manual + Playwright testing of PNC Induction Portal (gate + 3-step wizard). All 11 functional checks behave as specified. Two minor issues found: duplicate data-testid 'wizard-saved-badge' (two DOM nodes share it), and 'Progress saved' badge appears on initial wizard load before user has edited anything (auto-save effect fires once on mount). Firestore reads to 'access_codes' return permission-denied — gate correctly shows the connection-error message; the customer must apply rules from /app/SETUP_FIREBASE.md before a real access code will be accepted.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "ProgressHeader.jsx (line ~30) + Wizard.jsx (line ~301)",
+        "issue": "Two DOM elements share data-testid='wizard-saved-badge' (one in header, one in body, swapped via sm:hidden / hidden sm:flex). This causes Playwright strict-mode violation and is a testability bug. Recommend renaming one of them (e.g. 'wizard-saved-badge-mobile' / 'wizard-saved-badge-desktop') or rendering only one.",
+        "selector": "[data-testid='wizard-saved-badge']",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "Wizard.jsx auto-save effect (lines 100-107)",
+        "issue": "'Progress saved' badge appears immediately on a fresh /induction load (no user input yet) because hydratedRef.current is true on first render and the debounce effect runs unconditionally. This is misleading UX — users see 'Progress saved' before they've typed anything. Fix: skip the first effect run, or only setSavedAt when state actually differs from initial.",
+        "selector": "[data-testid='wizard-saved-badge']",
+        "priority": "LOW"
+      },
+      {
+        "component": "AccessGate.jsx (line 23)",
+        "issue": "Custom invalid-email-format validation message is unreachable because the input has type='email' so the browser's native HTML5 validation intercepts submit first ('Please include an @ in the email address...'). Either drop type='email' and rely on JS regex, or accept native validation. Currently the inline error data-testid='gate-error' never shows 'Please enter a valid email address.'",
+        "selector": "[data-testid='gate-error']",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Access code validation — Firestore read of 'access_codes' collection",
+        "issue": "Firebase returns 'Missing or insufficient permissions.' (caught in console). Gate falls into catch block and displays 'We couldn't validate your code. Please check your connection and try again.' — which is INCORRECT messaging for a permission error (user will think it's their network). EXPECTED PER PRD: customer must apply Firestore rules in /app/SETUP_FIREBASE.md. Recommend distinguishing permission-denied (rules not applied) from network errors in the catch block to surface the correct message to whoever is testing.",
+        "affected_selectors": ["[data-testid='gate-error']"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_results": {
+    "T1_gate_loads": "PASS — heading 'PNC Induction Portal', email/code/submit testids all visible",
+    "T2_empty_submit": "PASS — shows 'Please enter both email and access code.' inline, stays on /",
+    "T3_invalid_email_format": "BLOCKED by native HTML5 type=email — custom JS message never reached",
+    "T4_unrecognised_code_firestore": "PASS (with caveat) — Firestore returns permission-denied, gate shows connection-error message. Confirms Firestore rules NOT yet applied (expected first-iteration state).",
+    "T5_wizard_route_guard": "PASS — /induction without session redirects to /",
+    "T6_wizard_bypass_section1": "PASS — all Section 1 testids (upload-passport, upload-driving-licence, upload-bank-proof, dvla-yes, dvla-no, insurance-own, insurance-pnc, field-full-name, wizard-next-btn) render correctly",
+    "T7_section1_empty_continue": "PASS — clicking Continue with empty fields does NOT advance (label remains 'Section 1 of 3')",
+    "T8_section2_render_and_toggle": "PASS — Section 2 of 3 loaded via localStorage; med-receiving_treatment-yes toggle changes active class on click",
+    "T9_section2_incomplete_continue": "PASS — clicking Continue with incomplete Q&A does NOT advance",
+    "T10_section3_signature_validation": "PASS — signature-name, signature-pad, wizard-submit-btn all visible; submit without signature does NOT navigate (stays on Section 3)",
+    "T11_autosave_badge": "PASS (with caveat) — badge appears after typing into field-full-name; HOWEVER it also appears on initial load before any edit (see ui_bug above)"
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Rename one of the two 'wizard-saved-badge' data-testids (or render only one) — easy fix in ProgressHeader.jsx and Wizard.jsx",
+    "Suppress initial 'Progress saved' badge until at least one user edit occurs (gate the auto-save effect with a ref or compare to initial state)",
+    "Either remove type='email' from the gate email input or accept native HTML5 validation as the source of truth — current custom 'Please enter a valid email address.' branch is dead code",
+    "In AccessGate catch block, distinguish FirebaseError code 'permission-denied' from generic errors so the testing user sees 'Firestore rules not yet applied — see SETUP_FIREBASE.md' instead of the misleading 'check your connection' message",
+    "CUSTOMER ACTION (not a bug): Apply Firestore + Storage rules from /app/SETUP_FIREBASE.md and seed at least one document in 'access_codes' collection. Until this is done, no real access code can be validated."
+  ],
+  "critical_code_review_comments": [
+    "Wizard.jsx is 397 lines — manageable but submit handler (handleSubmit, ~110 lines) does 7 sequential Firestore/Storage operations with no atomicity. If any upload fails mid-way, partial data is left in Firestore (employee doc created but employee_documents not). Consider Firestore batched writes for the metadata docs, and either upload files first OR use a Cloud Function to finalise.",
+    "Wizard.jsx line 91: hydratedRef is initialised to true and never updated — the comment 'Auto-save on changes' is misleading; the effect fires on every mount. Either initialise to false and set true after mount, or rely on a deep-equals check.",
+    "AccessGate.jsx line 63: catch block swallows all errors and shows a generic 'connection' message — should branch on err.code === 'permission-denied' to give a more useful diagnostic during setup.",
+    "FileDropzone.jsx is good — uses ref for hidden input and has clear, validation, and remove paths. data-testid coverage is solid.",
+    "SignaturePad data-testid for the canvas is 'signature-pad' (good) and clear button is 'signature-pad-clear' (good).",
+    "lib/autosave.js storage key 'pnc_induction_progress_v1' is consistent. Note for next testing agent: review_request mentioned 'pnc_progress_v1' but actual key is 'pnc_induction_progress_v1'.",
+    "No backend code touched (per PRD); FastAPI server.py is intentionally untouched. PDF generation deferred."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only iteration)",
+    "frontend": "91% (10 of 11 behavioural checks pass cleanly; 1 — invalid email format — is intercepted by native HTML5 validation)"
+  },
+  "test_credentials": "None required. Firebase web config already wired in /app/frontend/.env. For real end-to-end gate validation, customer must seed an access_codes document and apply Firestore rules per /app/SETUP_FIREBASE.md.",
+  "seed_data_creation": "None. Used sessionStorage + localStorage bypass to test wizard UI in isolation, per agent-to-agent context note.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Storage key for autosave is 'pnc_induction_progress_v1' (NOT 'pnc_progress_v1' as mentioned in the original review_request). Session key is 'pnc_session_v1' (correct). To bypass into wizard: page.evaluate(\"() => sessionStorage.setItem('pnc_session_v1', JSON.stringify({accessCodeId:'fake',accessCode:'FAKE',invitedEmail:'qa@pnc.test'}))\") before navigating. To jump to step 2/3, prefill localStorage 'pnc_induction_progress_v1' with {step:1|2, data:{...}, medical:{...}, havs:{...}, files:{}}. Sonner toasts were not captured via [data-sonner-toast] selector in this run — functional validation was confirmed by checking that wizard-progress-label did not advance. If main agent fixes the duplicate 'wizard-saved-badge' testid, the strict-mode workaround (counting nth() elements) can be removed.",
+  "rca_of_the_issue": {
+    "duplicate_saved_badge_testid": "Both /app/frontend/src/components/ProgressHeader.jsx (~line 30) and /app/frontend/src/pages/Wizard.jsx (~line 301) render a 'Progress saved' element with the SAME data-testid='wizard-saved-badge', differentiated only by responsive class (hidden sm:flex vs sm:hidden). At desktop both exist in DOM (one hidden by CSS), at mobile both exist (other hidden). Playwright strict-mode treats both as a match. Fix: use unique testids per breakpoint OR render conditionally.",
+    "initial_progress_saved_flash": "Wizard.jsx line 91 sets hydratedRef.current = true at module init, so the FIRST run of the auto-save useEffect (which depends on data/medical/havs/step) saves immediately and sets savedAt, causing the badge to flash on a fresh load. Mitigation: initialise hydratedRef to false; set it true at end of first effect run after the timeout fires; OR compare current state to initial snapshot.",
+    "firestore_permission_denied": "Expected. Firestore rules from /app/SETUP_FIREBASE.md have not been applied to the project. Verified via console error 'FirebaseError: Missing or insufficient permissions.' on access_codes query. This is a customer-side configuration step, not a code bug — but the UI error message is misleading and should be improved (see action_items)."
+  }
+}
