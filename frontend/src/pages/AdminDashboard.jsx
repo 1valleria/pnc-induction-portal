@@ -4,6 +4,7 @@ import { adminFetch, clearCreds, downloadCsv, hasCreds } from "@/lib/adminAuth";
 import { TextInput } from "@/components/Field";
 import InviteModal from "@/components/InviteModal";
 import ReviewActionModal from "@/components/ReviewActionModal";
+import TestModeBanner from "@/components/TestModeBanner";
 import { Download, LogOut, RefreshCw, Search, ShieldCheck, ExternalLink, CheckCircle2, XCircle, Clock, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -282,6 +283,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-[#FAFAF9]">
+      <TestModeBanner />
       {/* Header */}
       <header className="bg-white border-b border-[#E7E5E4] sticky top-0 z-30">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">

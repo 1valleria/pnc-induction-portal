@@ -233,6 +233,22 @@ def export_employees_csv(
     )
 
 
+@admin_router.get("/system-status", dependencies=[Depends(require_admin)])
+def system_status() -> dict[str, Any]:
+    """Expose the safety-relevant runtime config so the Admin Portal can show
+    a clear 'Test Mode' banner when emails are being redirected."""
+    override = os.environ.get("RESEND_TEST_OVERRIDE_EMAIL")
+    sender = os.environ.get("SENDER_EMAIL") or "onboarding@resend.dev"
+    portal = os.environ.get("PUBLIC_PORTAL_URL") or ""
+    return {
+        "email_test_mode": bool(override),
+        "email_redirect_to": override or None,
+        "sender_email": sender,
+        "portal_url": portal,
+        "resend_configured": bool(os.environ.get("RESEND_API_KEY")),
+    }
+
+
 @admin_router.patch("/employees/{employee_id}/review", dependencies=[Depends(require_admin)])
 async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str, Any]:
     from email_service import EmailSendError, send_email
@@ -436,6 +452,7 @@ def list_invites(limit: int = Query(default=500, ge=1, le=2000)) -> dict[str, An
     items: list[dict[str, Any]] = []
     for doc in db.collection("access_codes").stream():
         d = doc.to_dict() or {}
+        delivery = d.get("delivery") if isinstance(d.get("delivery"), dict) else {}
         items.append(
             {
                 "id": doc.id,
@@ -447,7 +464,8 @@ def list_invites(limit: int = Query(default=500, ge=1, le=2000)) -> dict[str, An
                 "invite_status": d.get("invite_status") or ("used" if d.get("used") else "created"),
                 "invited_at": d.get("invited_at"),
                 "used_at": d.get("used_at") if not hasattr(d.get("used_at"), "isoformat") else d["used_at"].isoformat(),
-                "delivery_status": (d.get("delivery") or {}).get("status") if isinstance(d.get("delivery"), dict) else None,
+                "delivery_status": (delivery or {}).get("status"),
+                "delivery_redirected_to": (delivery or {}).get("actual_recipient") if (delivery or {}).get("redirected") else None,
             }
         )
     # newest invited_at first; fall back to created

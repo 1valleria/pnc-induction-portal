@@ -4,6 +4,7 @@ import { adminFetch, clearCreds, hasCreds } from "@/lib/adminAuth";
 import { CheckCircle2, Clock, LogOut, RefreshCw, ShieldCheck, UserPlus, XCircle, Mail, MessageSquare, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import InviteModal from "@/components/InviteModal";
+import TestModeBanner from "@/components/TestModeBanner";
 
 const STATUS_BADGE = {
   sent: { tone: "bg-[#F0FDF4] text-[#166534] border-[#BBF7D0]", icon: <Mail className="h-3 w-3" /> },
@@ -71,6 +72,7 @@ export default function AdminInvitations() {
 
   return (
     <div className="min-h-screen bg-[#FAFAF9]">
+      <TestModeBanner />
       <header className="bg-white border-b border-[#E7E5E4] sticky top-0 z-30">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <div className="h-9 w-9 rounded-lg bg-[#1C1917] text-white flex items-center justify-center">
@@ -155,9 +157,20 @@ export default function AdminInvitations() {
                       <td className="px-3 py-3 text-[#1C1917]">{it.email || <span className="text-[#A8A29E]">—</span>}</td>
                       <td className="px-3 py-3 font-mono text-[#1C1917]">{it.code}</td>
                       <td className="px-3 py-3">
-                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${badge.tone}`}>
-                          {badge.icon} {STATUS_LABEL[badgeKey] || badgeKey}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${badge.tone} w-fit`}>
+                            {badge.icon} {STATUS_LABEL[badgeKey] || badgeKey}
+                          </span>
+                          {it.delivery_redirected_to && (
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full border border-[#FDE68A] bg-[#FEF3C7] text-[#92400E] px-2 py-0.5 text-[10px] font-medium w-fit"
+                              data-testid={`invite-redirect-${it.id}`}
+                              title={`Test mode: delivered to ${it.delivery_redirected_to}`}
+                            >
+                              → redirected (test)
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-3 text-[#1C1917]">
                         {it.used ? (
