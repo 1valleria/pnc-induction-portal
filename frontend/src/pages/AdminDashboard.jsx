@@ -201,7 +201,8 @@ export default function AdminDashboard() {
   };
 
   /** Actually submit the review (called both for "pending_review" picks and
-   *  modal confirmations). */
+   *  modal confirmations). Returns the backend response so the modal can
+   *  reveal the freshly minted access code after a rejection. */
   const submitReview = async ({ employeeId, review_status, review_note }) => {
     try {
       const body = { review_status };
@@ -215,25 +216,40 @@ export default function AdminDashboard() {
       setItems((prev) =>
         prev.map((r) =>
           r.employee_id === employeeId
-            ? { ...r, review_status, review_note: review_note ?? r.review_note }
+            ? {
+                ...r,
+                review_status,
+                review_note: review_note ?? r.review_note,
+                resubmission_code: data.new_access_code ?? r.resubmission_code,
+                resubmission_requested:
+                  data.new_access_code ? true : r.resubmission_requested,
+              }
             : r
         )
       );
-      setReviewModal(null);
 
       if (review_status === "approved") {
+        setReviewModal(null);
         if (data.email_status === "sent") toast.success("Approved · approval email sent");
         else if (data.email_status === "failed") toast.error("Approved · email failed to send");
         else toast.success("Approved");
       } else if (review_status === "rejected") {
-        if (data.email_status === "sent") toast.success("Rejected · rejection email sent");
-        else if (data.email_status === "failed") toast.error("Rejected · email failed to send");
-        else toast.success("Rejected");
+        // Leave the modal open so it can reveal the new access code.
+        if (data.email_status === "sent") {
+          toast.success("Rejection email sent and new access code generated.");
+        } else if (data.email_status === "failed") {
+          toast.error("Rejected · email failed to send (access code still generated)");
+        } else {
+          toast.success("Rejected · new access code generated");
+        }
       } else {
+        setReviewModal(null);
         toast.success("Marked Pending Review");
       }
+      return data;
     } catch (err) {
       toast.error("Could not update review status.");
+      return undefined;
     }
   };
 
@@ -444,7 +460,7 @@ export default function AdminDashboard() {
         employeeEmail={reviewModal?.email}
         onClose={() => setReviewModal(null)}
         onConfirm={async ({ review_status, review_note }) => {
-          await submitReview({
+          return await submitReview({
             employeeId: reviewModal.employee_id,
             review_status,
             review_note,

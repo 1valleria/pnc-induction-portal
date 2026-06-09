@@ -32,6 +32,14 @@ Production-ready, mobile-first digital induction portal that replaces the existi
 - Success screen at `/success` with reference ID (`Success.jsx`)
 - `SETUP_FIREBASE.md` — required Firestore + Storage rules and access-code seed instructions
 
+## Rejection generates a fresh resubmission code (2026-02-09)
+- Rejection PATCH now mints a new unique access code via `_new_unique_code()` and writes an `access_codes` doc with: `code`, `email`, `full_name`, `used:false`, `employee_id:""`, `invite_status:"resent_after_rejection"`, `created_at`, `invited_at`, `related_rejected_employee_id`, `rejection_reason`.
+- `employee_summary` for the rejected record is updated with `resubmission_code`, `resubmission_requested: true`, `resubmission_access_code_id`, plus the existing `review_note` / `reviewed_at`.
+- `rejection()` email template now embeds the **new access code**, the portal URL, the inductee's email, and the explicit instruction "Please complete the induction form again using the new access code."
+- API response from `PATCH /api/admin/employees/{id}/review` now carries `new_access_code`, `new_access_code_id`, `portal_url`, `invitation_text` for HR display.
+- `ReviewActionModal` stays open after a successful rejection and reveals the new code with **Copy code** and **Copy resubmission invite** buttons + ready-to-paste plain-text invitation.
+- Toast and dashboard mirror the updated row: `resubmission_code` and `resubmission_requested` propagate immediately.
+
 ## Approval / Rejection workflow with confirmation modal (2026-02-09)
 - New `ReviewActionModal.jsx` — shared modal with two modes:
   - **Approved**: shows inductee name + email, displays subject line preview ("PNC Induction Approved"), single confirm button.

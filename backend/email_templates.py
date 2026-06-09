@@ -85,7 +85,14 @@ def approval(full_name: str) -> tuple[str, str]:
     return subject, _shell(preheader="You're cleared to start work with PNC.", body_html=body)
 
 
-def rejection(full_name: str, note: str | None) -> tuple[str, str]:
+def rejection(
+    full_name: str,
+    note: str | None,
+    *,
+    portal_url: str | None = None,
+    email: str | None = None,
+    new_code: str | None = None,
+) -> tuple[str, str]:
     subject = "Additional information required for your PNC induction"
     note_html = ""
     if note:
@@ -95,14 +102,39 @@ def rejection(full_name: str, note: str | None) -> tuple[str, str]:
           <tr><td style="padding:14px 18px;color:{INK};font-size:14px;line-height:1.55;white-space:pre-wrap;">{note}</td></tr>
         </table>
         """
+
+    resubmit_html = ""
+    if new_code and portal_url:
+        resubmit_html = f"""
+        <div style="font-size:11px;letter-spacing:.18em;color:{MUTED};font-weight:600;text-transform:uppercase;margin:22px 0 6px;">Resubmit your induction</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{SOFT};border:1px solid {LINE};border-radius:12px;margin-bottom:14px;">
+          <tr><td style="padding:18px 20px;">
+            <div style="font-size:11px;letter-spacing:.18em;color:{MUTED};font-weight:600;text-transform:uppercase;">Email address</div>
+            <div style="font-weight:600;color:{INK};font-size:15px;margin-top:2px;">{email or ''}</div>
+            <div style="font-size:11px;letter-spacing:.18em;color:{MUTED};font-weight:600;text-transform:uppercase;margin-top:12px;">New access code</div>
+            <div style="font-weight:700;font-family:'SFMono-Regular',Menlo,Consolas,monospace;color:{INK};font-size:18px;margin-top:2px;">{new_code}</div>
+          </td></tr>
+        </table>
+        <p style="margin:0 0 14px;color:{INK};font-size:14px;line-height:1.55;">
+          <b>Please complete the induction form again using the new access code.</b>
+        </p>
+        <p style="margin:0;">
+          <a href="{portal_url}" style="background:{BRAND};color:#FFFFFF;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:10px;display:inline-block;font-size:14px;">Restart my induction →</a>
+        </p>
+        <p style="margin:14px 0 0;color:{MUTED};font-size:12px;">
+          Direct link: <a href="{portal_url}" style="color:{BRAND};">{portal_url}</a>
+        </p>
+        """
+
     body = f"""
       <h1 style="margin:0 0 6px;color:{INK};font-size:22px;line-height:1.25;">Hi {full_name or 'there'},</h1>
       <p style="margin:0 0 14px;color:{MUTED};font-size:14px;line-height:1.55;">
         Thanks for completing your PNC induction. After reviewing your submission, PNC HR needs additional information before we can approve it.
       </p>
       {note_html}
-      <p style="margin:18px 0 0;color:{MUTED};font-size:13px;line-height:1.55;">
-        Please reply to this email or contact PNC HR to provide the information requested above. Once we have it, you can resubmit your induction or we'll update your record directly.
+      {resubmit_html}
+      <p style="margin:18px 0 0;color:{MUTED};font-size:12px;line-height:1.55;">
+        If you have any questions, just reply to this email or contact PNC HR.
       </p>
     """
     return subject, _shell(preheader="PNC HR needs more information for your induction.", body_html=body)

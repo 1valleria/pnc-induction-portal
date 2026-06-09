@@ -245,13 +245,41 @@ async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str,
         raise HTTPException(status_code=404, detail="employee_summary not found")
     rec = snap.to_dict() or {}
     previous = rec.get("review_status")
-    update = {
+    now_iso = datetime.now(timezone.utc).isoformat()
+    update: dict[str, Any] = {
         "review_status": payload.review_status,
-        "review_updated_at": datetime.now(timezone.utc).isoformat(),
-        "reviewed_at": datetime.now(timezone.utc).isoformat(),
+        "review_updated_at": now_iso,
+        "reviewed_at": now_iso,
     }
     if payload.review_note is not None:
         update["review_note"] = payload.review_note
+
+    # Rejection-only: mint a fresh access code so the inductee can resubmit.
+    new_access_code: str | None = None
+    new_access_code_id: str | None = None
+    portal_url = os.environ.get("PUBLIC_PORTAL_URL") or "https://induct-pro.emergent.host"
+    is_rejection = payload.review_status == "rejected" and previous != "rejected"
+    if is_rejection:
+        new_access_code = _new_unique_code(db)
+        invite_doc = db.collection("access_codes").document()
+        invite_doc.set({
+            "code": new_access_code,
+            "email": (rec.get("email") or rec.get("invited_email") or "").strip().lower() or None,
+            "full_name": rec.get("full_name") or "",
+            "used": False,
+            "employee_id": "",
+            "invite_status": "resent_after_rejection",
+            "created_at": now_iso,
+            "invited_at": now_iso,
+            "invited_at_server": datetime.now(timezone.utc),
+            "related_rejected_employee_id": employee_id,
+            "rejection_reason": payload.review_note or "",
+        })
+        new_access_code_id = invite_doc.id
+        update["resubmission_code"] = new_access_code
+        update["resubmission_requested"] = True
+        update["resubmission_access_code_id"] = new_access_code_id
+
     doc_ref.update(update)
 
     # Side-effect: notify inductee on approval / rejection transitions.
@@ -262,7 +290,13 @@ async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str,
             if payload.review_status == "approved":
                 subject, html = approval(rec.get("full_name") or "")
             else:
-                subject, html = rejection(rec.get("full_name") or "", payload.review_note)
+                subject, html = rejection(
+                    rec.get("full_name") or "",
+                    payload.review_note,
+                    portal_url=portal_url,
+                    email=to,
+                    new_code=new_access_code,
+                )
             result = await send_email(
                 db,
                 to=to,
@@ -275,7 +309,28 @@ async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str,
         except EmailSendError:
             email_status = "failed"
 
-    return {"employee_id": employee_id, "email_status": email_status, **update}
+    response: dict[str, Any] = {
+        "employee_id": employee_id,
+        "email_status": email_status,
+        **update,
+    }
+    if new_access_code:
+        invitation_text = (
+            "PNC Induction — Resubmission\n\n"
+            f"Hi {(rec.get('full_name') or '').strip()},\n\n"
+            "Your previous induction submission needs additional information. "
+            "Please complete the induction form again using the new access code below.\n\n"
+            f"{portal_url}\n\n"
+            f"Email: {to or '(use your own email)'}\n"
+            f"New Access Code: {new_access_code}\n\n"
+            "Reason from PNC HR:\n"
+            f"{payload.review_note or ''}\n"
+        )
+        response["new_access_code"] = new_access_code
+        response["new_access_code_id"] = new_access_code_id
+        response["invitation_text"] = invitation_text
+        response["portal_url"] = portal_url
+    return response
 
 
 # ---------------------------------------------------------------------------
