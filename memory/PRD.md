@@ -32,6 +32,15 @@ Production-ready, mobile-first digital induction portal that replaces the existi
 - Success screen at `/success` with reference ID (`Success.jsx`)
 - `SETUP_FIREBASE.md` — required Firestore + Storage rules and access-code seed instructions
 
+## Approval / Rejection workflow with confirmation modal (2026-02-09)
+- New `ReviewActionModal.jsx` — shared modal with two modes:
+  - **Approved**: shows inductee name + email, displays subject line preview ("PNC Induction Approved"), single confirm button.
+  - **Rejected**: requires a non-empty rejection note (text area, Send button disabled while empty). Note appears verbatim inside the rejection email.
+- AdminDashboard review-status dropdown now opens the modal for Approved / Rejected. "Pending Review" still fires inline (no email).
+- `submitReview()` shows a clear toast: "Approved · approval email sent", "Rejected · rejection email sent", or "… · email failed to send" — pulled straight from the backend's `email_status` field.
+- Backend: `update_review_status` now also writes `reviewed_at` (alongside `review_updated_at`). Email templates: approval subject is exactly "PNC Induction Approved"; rejection subject is "Additional information required for your PNC induction" with a clearly-styled note block. Both still log to `email_logs`. Resend key stays backend-only.
+- Live-verified: approval email + rejection email (with note) both delivered to the Resend account inbox in test mode (`email_status: "sent"` in API response).
+
 ## Invite Employee + email workflow (2026-02-08)
 - Backend: `POST /api/admin/invites` (Basic Auth) generates a unique `PNC-XXXX-XXXX` code, writes `access_codes` doc (code, email, full_name, used:false, employee_id:"", invited_at, invite_status), and — when `send_email=true` — sends a branded HTML email via Resend (`email_service.py`, `email_templates.py`). Returns the ready-to-paste plain-text invitation so HR can copy/paste into WhatsApp/SMS/Teams.
 - `GET /api/admin/invites` (Basic Auth) lists all invitations newest-first.

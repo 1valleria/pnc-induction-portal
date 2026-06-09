@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { adminFetch, clearCreds, downloadCsv, hasCreds } from "@/lib/adminAuth";
 import { TextInput } from "@/components/Field";
 import InviteModal from "@/components/InviteModal";
+import ReviewActionModal from "@/components/ReviewActionModal";
 import { Download, LogOut, RefreshCw, Search, ShieldCheck, ExternalLink, CheckCircle2, XCircle, Clock, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -138,6 +139,7 @@ export default function AdminDashboard() {
   const [q, setQ] = useState("");
   const [reviewFilter, setReviewFilter] = useState("");
   const [showInvite, setShowInvite] = useState(false);
+  const [reviewModal, setReviewModal] = useState(null); // { employee_id, mode, name, email }
 
   useEffect(() => {
     if (!hasCreds()) {
@@ -179,18 +181,57 @@ export default function AdminDashboard() {
     );
   }, [items, q]);
 
-  const updateReview = async (employeeId, review_status) => {
+  /** Triggered by the inline review dropdown.
+   *   - "pending_review" → set directly with no email (just resets state).
+   *   - "approved" / "rejected" → open ReviewActionModal; the modal calls
+   *     submitReview() once HR confirms.
+   */
+  const onReviewSelect = (employeeId, review_status) => {
+    if (review_status === "pending_review") {
+      submitReview({ employeeId, review_status });
+      return;
+    }
+    const rec = items.find((r) => r.employee_id === employeeId);
+    setReviewModal({
+      employee_id: employeeId,
+      mode: review_status,
+      name: rec?.full_name,
+      email: rec?.email || rec?.invited_email,
+    });
+  };
+
+  /** Actually submit the review (called both for "pending_review" picks and
+   *  modal confirmations). */
+  const submitReview = async ({ employeeId, review_status, review_note }) => {
     try {
+      const body = { review_status };
+      if (review_note !== undefined) body.review_note = review_note;
       const res = await adminFetch(`/api/admin/employees/${employeeId}/review`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ review_status }),
+        body: JSON.stringify(body),
       });
-      await res.json();
+      const data = await res.json();
       setItems((prev) =>
-        prev.map((r) => (r.employee_id === employeeId ? { ...r, review_status } : r))
+        prev.map((r) =>
+          r.employee_id === employeeId
+            ? { ...r, review_status, review_note: review_note ?? r.review_note }
+            : r
+        )
       );
-      toast.success(`Marked ${REVIEW_LABEL[review_status]}`);
+      setReviewModal(null);
+
+      if (review_status === "approved") {
+        if (data.email_status === "sent") toast.success("Approved · approval email sent");
+        else if (data.email_status === "failed") toast.error("Approved · email failed to send");
+        else toast.success("Approved");
+      } else if (review_status === "rejected") {
+        if (data.email_status === "sent") toast.success("Rejected · rejection email sent");
+        else if (data.email_status === "failed") toast.error("Rejected · email failed to send");
+        else toast.success("Rejected");
+      } else {
+        toast.success("Marked Pending Review");
+      }
     } catch (err) {
       toast.error("Could not update review status.");
     }
@@ -373,7 +414,7 @@ export default function AdminDashboard() {
                           <Cell
                             col={c}
                             value={rec[c.key]}
-                            onChangeReview={(v) => updateReview(rec.employee_id, v)}
+                            onChangeReview={(v) => onReviewSelect(rec.employee_id, v)}
                           />
                         </td>
                       ))}
@@ -393,6 +434,21 @@ export default function AdminDashboard() {
         onClose={() => setShowInvite(false)}
         onCreated={() => {
           toast.success("Invitation recorded — see the Invitations tab to track delivery.");
+        }}
+      />
+
+      <ReviewActionModal
+        open={!!reviewModal}
+        mode={reviewModal?.mode}
+        employeeName={reviewModal?.name}
+        employeeEmail={reviewModal?.email}
+        onClose={() => setReviewModal(null)}
+        onConfirm={async ({ review_status, review_note }) => {
+          await submitReview({
+            employeeId: reviewModal.employee_id,
+            review_status,
+            review_note,
+          });
         }}
       />
     </div>

@@ -72,7 +72,7 @@ def invitation(full_name: str, portal_url: str, email: str, code: str) -> tuple[
 
 
 def approval(full_name: str) -> tuple[str, str]:
-    subject = "Your PNC induction has been approved"
+    subject = "PNC Induction Approved"
     body = f"""
       <h1 style="margin:0 0 6px;color:{INK};font-size:22px;line-height:1.25;">Welcome aboard, {full_name or 'there'}.</h1>
       <p style="margin:0 0 14px;color:{MUTED};font-size:14px;line-height:1.55;">
@@ -86,22 +86,23 @@ def approval(full_name: str) -> tuple[str, str]:
 
 
 def rejection(full_name: str, note: str | None) -> tuple[str, str]:
-    subject = "Action required on your PNC induction"
+    subject = "Additional information required for your PNC induction"
     note_html = ""
     if note:
         note_html = f"""
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{SOFT};border:1px solid {LINE};border-radius:12px;margin:14px 0;">
-          <tr><td style="padding:14px 18px;color:{INK};font-size:14px;line-height:1.5;">{note}</td></tr>
+        <div style="font-size:11px;letter-spacing:.18em;color:{MUTED};font-weight:600;text-transform:uppercase;margin:14px 0 6px;">From PNC HR</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{SOFT};border:1px solid {LINE};border-radius:12px;">
+          <tr><td style="padding:14px 18px;color:{INK};font-size:14px;line-height:1.55;white-space:pre-wrap;">{note}</td></tr>
         </table>
         """
     body = f"""
       <h1 style="margin:0 0 6px;color:{INK};font-size:22px;line-height:1.25;">Hi {full_name or 'there'},</h1>
       <p style="margin:0 0 14px;color:{MUTED};font-size:14px;line-height:1.55;">
-        Your PNC induction couldn't be approved as submitted. PNC HR will be in touch with the next steps.
+        Thanks for completing your PNC induction. After reviewing your submission, PNC HR needs additional information before we can approve it.
       </p>
       {note_html}
-      <p style="margin:0;color:{MUTED};font-size:12px;">
-        Please reply to this email or contact PNC HR if you have any questions.
+      <p style="margin:18px 0 0;color:{MUTED};font-size:13px;line-height:1.55;">
+        Please reply to this email or contact PNC HR to provide the information requested above. Once we have it, you can resubmit your induction or we'll update your record directly.
       </p>
     """
-    return subject, _shell(preheader="PNC HR needs another look at your induction.", body_html=body)
+    return subject, _shell(preheader="PNC HR needs more information for your induction.", body_html=body)

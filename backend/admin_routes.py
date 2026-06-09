@@ -248,6 +248,7 @@ async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str,
     update = {
         "review_status": payload.review_status,
         "review_updated_at": datetime.now(timezone.utc).isoformat(),
+        "reviewed_at": datetime.now(timezone.utc).isoformat(),
     }
     if payload.review_note is not None:
         update["review_note"] = payload.review_note
