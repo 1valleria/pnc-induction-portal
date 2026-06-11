@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { X, ShieldCheck, AlertTriangle, Mail, Send, Copy, Check, ArrowRight } from "lucide-react";
-import { Field, TextArea } from "@/components/Field";
+import { Field, TextArea, TextInput } from "@/components/Field";
 
 /**
  * Review action modal:
@@ -13,6 +13,8 @@ import { Field, TextArea } from "@/components/Field";
  */
 export default function ReviewActionModal({ open, mode, employeeName, employeeEmail, onConfirm, onClose }) {
   const [note, setNote] = useState("");
+  const [managerEmail, setManagerEmail] = useState("");
+  const [managerError, setManagerError] = useState(null);
   const [sending, setSending] = useState(false);
   const [resubmitResult, setResubmitResult] = useState(null);
   const [copiedField, setCopiedField] = useState(null);
@@ -20,6 +22,8 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
   useEffect(() => {
     if (open) {
       setNote("");
+      setManagerEmail("");
+      setManagerError(null);
       setSending(false);
       setResubmitResult(null);
       setCopiedField(null);
@@ -48,20 +52,24 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
   const handleSubmit = async (e) => {
     e?.preventDefault?.();
     if (!canSubmit || sending) return;
+    if (managerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(managerEmail.trim())) {
+      setManagerError("Please enter a valid manager email address.");
+      return;
+    }
+    setManagerError(null);
     setSending(true);
     try {
       const result = await onConfirm({
         review_status: isReject ? "rejected" : "approved",
         review_note: isReject ? note.trim() : undefined,
+        manager_email: managerEmail.trim() || undefined,
       });
-      // For rejections, stay open and reveal the new access code.
       if (isReject && result && result.new_access_code) {
         setResubmitResult(result);
         setSending(false);
         return;
       }
     } finally {
-      // Approvals (and any path that didn't produce a code) close via parent.
       if (!isReject) setSending(false);
     }
   };
@@ -185,6 +193,16 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
                   required
                 />
               </Field>
+              <Field label="Manager Email" hint="Optional — sends a copy of the rejection notice to the inductee's manager." error={managerError}>
+                <TextInput
+                  data-testid="review-modal-manager-email"
+                  value={managerEmail}
+                  onChange={(e) => setManagerEmail(e.target.value)}
+                  placeholder="manager@example.com"
+                  type="text"
+                  inputMode="email"
+                />
+              </Field>
               <div className="rounded-lg bg-[#FEF2F2] border border-[#FECACA] text-[#B91C1C] text-xs p-3 flex items-start gap-2">
                 <AlertTriangle className="h-3.5 w-3.5 mt-0.5" />
                 On submit we'll mark the record <b>Rejected</b>, generate a new access code and send the email immediately.
@@ -195,6 +213,16 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
               <p className="text-sm text-[#1C1917] leading-relaxed">
                 The inductee will be marked <b>Approved</b> and immediately notified by email that they are cleared to start.
               </p>
+              <Field label="Manager Email" hint="Optional — sends a copy of the approval notice to the inductee's manager." error={managerError}>
+                <TextInput
+                  data-testid="review-modal-manager-email"
+                  value={managerEmail}
+                  onChange={(e) => setManagerEmail(e.target.value)}
+                  placeholder="manager@example.com"
+                  type="text"
+                  inputMode="email"
+                />
+              </Field>
               <div className="rounded-lg bg-[#F0FDF4] border border-[#BBF7D0] text-[#166534] text-xs p-3 flex items-start gap-2">
                 <Mail className="h-3.5 w-3.5 mt-0.5" />
                 Subject line: <b>PNC Induction Approved</b>
@@ -231,7 +259,7 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
                 style={{ background: isReject ? "#B91C1C" : "#166534" }}
               >
                 <Send className="h-4 w-4" />
-                {sending ? "Sending…" : isReject ? "Send Rejection Email" : "Send Approval Email"}
+                {sending ? "Sending…" : isReject ? "Reject and Send Email" : "Approve and Send Email"}
               </button>
             </>
           )}

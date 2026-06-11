@@ -204,10 +204,11 @@ export default function AdminDashboard() {
   /** Actually submit the review (called both for "pending_review" picks and
    *  modal confirmations). Returns the backend response so the modal can
    *  reveal the freshly minted access code after a rejection. */
-  const submitReview = async ({ employeeId, review_status, review_note }) => {
+  const submitReview = async ({ employeeId, review_status, review_note, manager_email }) => {
     try {
       const body = { review_status };
       if (review_note !== undefined) body.review_note = review_note;
+      if (manager_email) body.manager_email = manager_email;
       const res = await adminFetch(`/api/admin/employees/${employeeId}/review`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -221,6 +222,8 @@ export default function AdminDashboard() {
                 ...r,
                 review_status,
                 review_note: review_note ?? r.review_note,
+                manager_email: data.manager_email ?? r.manager_email,
+                manager_notified_at: data.manager_notified_at ?? r.manager_notified_at,
                 resubmission_code: data.new_access_code ?? r.resubmission_code,
                 resubmission_requested:
                   data.new_access_code ? true : r.resubmission_requested,
@@ -229,19 +232,22 @@ export default function AdminDashboard() {
         )
       );
 
+      const managerSent = data.manager_email_status === "sent";
       if (review_status === "approved") {
         setReviewModal(null);
-        if (data.email_status === "sent") toast.success("Approved · approval email sent");
-        else if (data.email_status === "failed") toast.error("Approved · email failed to send");
-        else toast.success("Approved");
+        if (managerSent) toast.success("Employee approved and manager notified");
+        else if (data.email_status === "sent") toast.success("Employee approved");
+        else if (data.email_status === "failed") toast.error("Approved · employee email failed");
+        else toast.success("Employee approved");
       } else if (review_status === "rejected") {
-        // Leave the modal open so it can reveal the new access code.
-        if (data.email_status === "sent") {
-          toast.success("Rejection email sent and new access code generated.");
+        if (managerSent) {
+          toast.success("Employee rejected and manager notified");
+        } else if (data.email_status === "sent") {
+          toast.success("Employee rejected and resubmission code sent");
         } else if (data.email_status === "failed") {
           toast.error("Rejected · email failed to send (access code still generated)");
         } else {
-          toast.success("Rejected · new access code generated");
+          toast.success("Employee rejected and resubmission code sent");
         }
       } else {
         setReviewModal(null);
@@ -461,11 +467,12 @@ export default function AdminDashboard() {
         employeeName={reviewModal?.name}
         employeeEmail={reviewModal?.email}
         onClose={() => setReviewModal(null)}
-        onConfirm={async ({ review_status, review_note }) => {
+        onConfirm={async ({ review_status, review_note, manager_email }) => {
           return await submitReview({
             employeeId: reviewModal.employee_id,
             review_status,
             review_note,
+            manager_email,
           });
         }}
       />

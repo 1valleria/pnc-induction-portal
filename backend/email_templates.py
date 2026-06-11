@@ -71,6 +71,59 @@ def invitation(full_name: str, portal_url: str, email: str, code: str) -> tuple[
     return subject, _shell(preheader=preheader, body_html=body)
 
 
+def _employee_block(employee_name: str, employee_email: str, company_name: str | None) -> str:
+    rows = [("Inductee", employee_name or "—"), ("Email", employee_email or "—")]
+    if company_name:
+        rows.append(("Company", company_name))
+    body = "".join(
+        f'<div style="font-size:11px;letter-spacing:.18em;color:{MUTED};font-weight:600;text-transform:uppercase;">{lbl}</div>'
+        f'<div style="font-weight:600;color:{INK};font-size:15px;margin:2px 0 10px;">{val}</div>'
+        for lbl, val in rows
+    )
+    return f"""
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{SOFT};border:1px solid {LINE};border-radius:12px;margin:14px 0;">
+      <tr><td style="padding:16px 20px;">{body}</td></tr>
+    </table>
+    """
+
+
+def manager_approval(employee_name: str, employee_email: str, company_name: str | None, pdf_url: str | None) -> tuple[str, str]:
+    subject = f"PNC Induction Approved — {employee_name or 'Subcontractor'}"
+    pdf_html = ""
+    if pdf_url:
+        pdf_html = f'<p style="margin:14px 0 0;"><a href="{pdf_url}" style="background:{BRAND};color:#fff;text-decoration:none;font-weight:600;padding:10px 18px;border-radius:10px;display:inline-block;font-size:13px;">Open induction PDF →</a></p>'
+    body = f"""
+      <h1 style="margin:0 0 6px;color:{INK};font-size:20px;line-height:1.25;">Induction approved</h1>
+      <p style="margin:0 0 6px;color:{MUTED};font-size:14px;line-height:1.55;">
+        The following subcontractor has completed their PNC induction and has been approved by HR. They are cleared to begin work.
+      </p>
+      {_employee_block(employee_name, employee_email, company_name)}
+      {pdf_html}
+    """
+    return subject, _shell(preheader="A subcontractor under your supervision has been approved.", body_html=body)
+
+
+def manager_rejection(employee_name: str, employee_email: str, company_name: str | None, note: str | None) -> tuple[str, str]:
+    subject = f"PNC Induction Rejected — {employee_name or 'Subcontractor'}"
+    note_html = ""
+    if note:
+        note_html = f"""
+        <div style="font-size:11px;letter-spacing:.18em;color:{MUTED};font-weight:600;text-transform:uppercase;margin:14px 0 6px;">Rejection reason</div>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:{SOFT};border:1px solid {LINE};border-radius:12px;">
+          <tr><td style="padding:14px 18px;color:{INK};font-size:14px;line-height:1.55;white-space:pre-wrap;">{note}</td></tr>
+        </table>
+        """
+    body = f"""
+      <h1 style="margin:0 0 6px;color:{INK};font-size:20px;line-height:1.25;">Induction rejected</h1>
+      <p style="margin:0 0 6px;color:{MUTED};font-size:14px;line-height:1.55;">
+        The following subcontractor's induction has been rejected by PNC HR. A new one-time access code has been sent to them so they can resubmit.
+      </p>
+      {_employee_block(employee_name, employee_email, company_name)}
+      {note_html}
+    """
+    return subject, _shell(preheader="A subcontractor under your supervision has been rejected.", body_html=body)
+
+
 def approval(full_name: str) -> tuple[str, str]:
     subject = "PNC Induction Approved"
     body = f"""

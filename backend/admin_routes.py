@@ -170,6 +170,7 @@ def _stream_employees(records: list[dict]):
 class ReviewIn(BaseModel):
     review_status: str = Field(..., pattern="^(pending_review|approved|rejected)$")
     review_note: str | None = Field(default=None, max_length=2000)
+    manager_email: str | None = Field(default=None, max_length=200)
 
 
 def _get_db():
@@ -330,6 +331,58 @@ async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str,
         "email_status": email_status,
         **update,
     }
+
+    # Manager-notification side-effect. Always after the inductee email so a
+    # failure here never blocks the primary path.
+    manager_email_raw = (payload.manager_email or "").strip()
+    manager_status: str | None = None
+    if manager_email_raw and payload.review_status in {"approved", "rejected"}:
+        # Basic RFC-5322-lite validation. Pydantic v1 lacks EmailStr by default
+        # in this project, so we keep a small inline guard.
+        import re
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", manager_email_raw):
+            raise HTTPException(status_code=422, detail="manager_email is not a valid email address")
+        from email_templates import manager_approval, manager_rejection
+        try:
+            company_name = rec.get("company_name") or (rec.get("business") or {}).get("company_name")
+            if payload.review_status == "approved":
+                m_subject, m_html = manager_approval(
+                    employee_name=rec.get("full_name") or "",
+                    employee_email=to or "",
+                    company_name=company_name,
+                    pdf_url=rec.get("pdf_url"),
+                )
+                purpose = "manager_approval_notification"
+            else:
+                m_subject, m_html = manager_rejection(
+                    employee_name=rec.get("full_name") or "",
+                    employee_email=to or "",
+                    company_name=company_name,
+                    note=payload.review_note,
+                )
+                purpose = "manager_rejection_notification"
+            m_result = await send_email(
+                db,
+                to=manager_email_raw,
+                subject=m_subject,
+                html=m_html,
+                purpose=purpose,
+                employee_id=employee_id,
+            )
+            manager_status = m_result.get("status")
+            # Persist on employee_summary
+            now_iso2 = datetime.now(timezone.utc).isoformat()
+            doc_ref.update({
+                "manager_email": manager_email_raw,
+                "manager_notified_at": now_iso2,
+            })
+            update["manager_email"] = manager_email_raw
+            update["manager_notified_at"] = now_iso2
+            response.update(update)
+        except EmailSendError:
+            manager_status = "failed"
+        response["manager_email"] = manager_email_raw
+        response["manager_email_status"] = manager_status
     if new_access_code:
         invitation_text = (
             "PNC Induction — Resubmission\n\n"
