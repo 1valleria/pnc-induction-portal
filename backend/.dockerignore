@@ -1,0 +1,22 @@
+# Never bake secrets into the image
+.env
+.env.*
+
+# Local Python cruft
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Tests don't need to ship to production
+tests/
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
