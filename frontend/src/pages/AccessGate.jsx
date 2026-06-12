@@ -155,8 +155,8 @@ export default function AccessGate() {
           </form>
 
           <p className="text-center text-xs text-[#57534E] mt-6">
-            Need help? Contact PNC HR at{" "}
-            <a className="underline" href="mailto:hr@pnc.co.uk">hr@pnc.co.uk</a>
+            Need help? Contact PNC Admin at{" "}
+            <a className="underline" href="mailto:admin@pncunique.com">admin@pncunique.com</a>
           </p>
         </div>
       </div>
