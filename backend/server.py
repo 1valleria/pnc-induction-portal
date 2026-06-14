@@ -428,6 +428,287 @@ async def mark_access_code_used(payload: MarkCodeUsedIn) -> dict[str, Any]:
     }
 
 
+class FileUploadIn(BaseModel):
+    path: str
+    url: str
+    name: str | None = None
+    size: int | None = None
+    type: str | None = None
+
+
+class SubmitInductionIn(BaseModel):
+    # Session linkage (from AccessGate -> sessionStorage)
+    access_code_id: str = Field(..., min_length=1, max_length=128)
+    access_code: str = Field(..., min_length=1, max_length=64)
+    invited_email: str | None = Field(default=None, max_length=200)
+    # Section 1 — personal
+    full_name: str = Field(..., min_length=1, max_length=200)
+    dob: str = Field(..., min_length=1, max_length=32)
+    telephone: str = Field(..., min_length=1, max_length=32)
+    email: str = Field(..., min_length=3, max_length=200)
+    address1: str = Field(..., min_length=1, max_length=300)
+    postcode: str = Field(..., min_length=1, max_length=20)
+    ni_number: str = Field(..., min_length=1, max_length=20)
+    emergency_name: str = Field(..., min_length=1, max_length=200)
+    emergency_phone: str = Field(..., min_length=1, max_length=32)
+    emergency_relationship: str = Field(..., min_length=1, max_length=80)
+    right_to_work_share_code: str = Field(..., min_length=1, max_length=32)
+    dvla_check: str = Field(..., min_length=1, max_length=10)
+    company_name: str = Field(..., min_length=1, max_length=200)
+    bank_account: str = Field(..., min_length=1, max_length=32)
+    sort_code: str = Field(..., min_length=1, max_length=16)
+    utr: str = Field(..., min_length=1, max_length=32)
+    vat_number: str | None = Field(default=None, max_length=32)
+    insurance_option: str = Field(..., min_length=1, max_length=20)
+    # Section 3 — signature (image already uploaded to Storage via `files.signature`)
+    digital_signature_name: str = Field(..., min_length=1, max_length=200)
+    # Section 2 — medical + HAVS answers (all yes/no)
+    medical: dict[str, Any] = Field(default_factory=dict)
+    havs: dict[str, Any] = Field(default_factory=dict)
+    # Files already uploaded directly to Storage (slot -> {path, url, name, size, type})
+    files: dict[str, FileUploadIn] = Field(default_factory=dict)
+    # Canonical storage folder path (built client-side from slug + employee_id placeholder)
+    storage_folder_path: str = Field(..., min_length=1, max_length=300)
+    submitted_at: str = Field(..., min_length=1, max_length=40)
+
+
+class SubmitInductionOut(BaseModel):
+    employee_id: str
+    pdf_url: str | None
+    employee_summary_id: str
+    submitted_at: str
+
+
+@api_router.post("/induction/submit", response_model=SubmitInductionOut)
+async def submit_induction(payload: SubmitInductionIn) -> SubmitInductionOut:
+    """Single endpoint that performs the entire induction submit:
+    1. Create employees doc
+    2. Create medical_history doc
+    3. Create havs_questionnaires doc
+    4. Create employee_documents doc (files already in Storage)
+    5. Mark access code as used
+    6. Generate PDF + employee_summary
+
+    All steps run server-side via the Firebase Admin SDK so security rules
+    cannot block submission and every stage is logged in Cloud Run.
+    """
+    from firebase_client import get_bucket, get_firestore
+    from pdf_generator import build_induction_pdf
+
+    db = get_firestore()
+    bucket = get_bucket()
+    project_id = getattr(db, "project", None) or "<unknown>"
+    server_now = datetime.now(timezone.utc)
+    submitted_at = payload.submitted_at
+
+    logger.info(
+        "submit.start project=%s access_code_id=%s code=%s email=%s",
+        project_id, payload.access_code_id, payload.access_code, payload.email,
+    )
+
+    # 1. employees -------------------------------------------------------------
+    employee_payload: dict[str, Any] = {
+        "full_name": payload.full_name,
+        "dob": payload.dob,
+        "telephone": payload.telephone,
+        "email": payload.email,
+        "invited_email": payload.invited_email or payload.email,
+        "address1": payload.address1,
+        "postcode": payload.postcode,
+        "ni_number": payload.ni_number,
+        "emergency_contact": {
+            "name": payload.emergency_name,
+            "phone": payload.emergency_phone,
+            "relationship": payload.emergency_relationship,
+        },
+        "right_to_work_share_code": payload.right_to_work_share_code,
+        "dvla_check": payload.dvla_check,
+        "business": {
+            "company_name": payload.company_name,
+            "bank_account": payload.bank_account,
+            "sort_code": payload.sort_code,
+            "utr": payload.utr,
+            "vat_number": payload.vat_number or None,
+        },
+        "insurance_option": payload.insurance_option,
+        "digital_signature_name": payload.digital_signature_name,
+        "access_code": payload.access_code,
+        "access_code_id": payload.access_code_id,
+        "submitted_at": submitted_at,
+        "submitted_at_server": server_now,
+        "status": "submitted",
+    }
+    try:
+        _, emp_ref = db.collection("employees").add(employee_payload)
+        employee_id = emp_ref.id
+        logger.info(
+            "submit.employee_created project=%s employee_id=%s email=%s full_name=%r",
+            project_id, employee_id, payload.email, payload.full_name,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("submit.employee_failed project=%s err=%s", project_id, exc)
+        raise HTTPException(status_code=502, detail=f"Failed to create employee record: {exc}")
+
+    # 2. medical_history -------------------------------------------------------
+    medical_doc: dict[str, Any] = {
+        "employee_id": employee_id,
+        **{k: payload.medical.get(k) for k in _MEDICAL_KEYS},
+        "if_yes_details": payload.medical.get("if_yes_details") or "",
+        "medication_disability_details": payload.medical.get("medication_disability_details") or "",
+        "submitted_at": submitted_at,
+        "submitted_at_server": server_now,
+    }
+    try:
+        db.collection("medical_history").add(medical_doc)
+        logger.info("submit.medical_created project=%s employee_id=%s", project_id, employee_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("submit.medical_failed project=%s employee_id=%s err=%s",
+                         project_id, employee_id, exc)
+        raise HTTPException(status_code=502, detail=f"Failed to create medical record: {exc}")
+
+    # 3. havs_questionnaires ---------------------------------------------------
+    _HAVS_KEYS = [
+        "tingling_after_vibration", "tingling_other_times",
+        "night_pain_tingling_numbness", "finger_numbness_after_vibration",
+        "fingers_white_in_cold", "fingers_white_other_times",
+        "muscle_or_joint_problems", "difficulty_handling_small_objects",
+    ]
+    havs_doc: dict[str, Any] = {
+        "employee_id": employee_id,
+        **{k: payload.havs.get(k) for k in _HAVS_KEYS},
+        "submitted_at": submitted_at,
+        "submitted_at_server": server_now,
+    }
+    try:
+        db.collection("havs_questionnaires").add(havs_doc)
+        logger.info("submit.havs_created project=%s employee_id=%s", project_id, employee_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("submit.havs_failed project=%s employee_id=%s err=%s",
+                         project_id, employee_id, exc)
+        raise HTTPException(status_code=502, detail=f"Failed to create HAVS record: {exc}")
+
+    # 4. employee_documents ----------------------------------------------------
+    files_meta = {slot: f.model_dump() for slot, f in payload.files.items()}
+    documents_doc: dict[str, Any] = {
+        "employee_id": employee_id,
+        "storage_folder_path": payload.storage_folder_path,
+        "files": files_meta,
+        "pdf_url": None,
+        "submitted_at": submitted_at,
+        "submitted_at_server": server_now,
+    }
+    try:
+        db.collection("employee_documents").add(documents_doc)
+        logger.info(
+            "submit.documents_created project=%s employee_id=%s slots=%s",
+            project_id, employee_id, sorted(files_meta.keys()),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("submit.documents_failed project=%s employee_id=%s err=%s",
+                         project_id, employee_id, exc)
+        raise HTTPException(status_code=502, detail=f"Failed to create documents record: {exc}")
+
+    # 5. Mark access code as used (inline; same idempotent logic as /access-code/mark-used)
+    try:
+        code_ref = db.collection("access_codes").document(payload.access_code_id)
+        code_snap = code_ref.get()
+        if code_snap.exists:
+            code_ref.update({
+                "used": True,
+                "used_at": datetime.now(timezone.utc).isoformat(),
+                "used_at_server": datetime.now(timezone.utc),
+                "employee_id": employee_id,
+            })
+            logger.info(
+                "mark_used.ok project=%s doc_id=%s code=%s employee_id=%s previously_used=%s",
+                project_id, payload.access_code_id, payload.access_code,
+                employee_id, bool(code_snap.to_dict().get("used")),
+            )
+        else:
+            logger.warning(
+                "mark_used.skipped_missing_doc project=%s doc_id=%s code=%s employee_id=%s",
+                project_id, payload.access_code_id, payload.access_code, employee_id,
+            )
+    except Exception as exc:  # noqa: BLE001
+        # Mark-used failure must not block submission — log loudly and continue.
+        logger.exception(
+            "mark_used.failed_non_blocking project=%s doc_id=%s employee_id=%s err=%s",
+            project_id, payload.access_code_id, employee_id, exc,
+        )
+
+    # 6. PDF generation + employee_summary -------------------------------------
+    pdf_url: str | None = None
+    try:
+        bundle = _fetch_employee_bundle(db, employee_id)
+        documents_meta = dict(bundle["documents"] or {})
+        files = documents_meta.get("files") or {}
+        storage_folder_path, is_legacy = _resolve_storage_folder(
+            documents_meta, bundle["employee"], employee_id
+        )
+
+        sig_bytes = _download_signature_bytes(bucket, files)
+        if sig_bytes:
+            documents_meta["signature_image_bytes"] = sig_bytes
+
+        submitted_at_dt = None
+        try:
+            submitted_at_dt = datetime.fromisoformat(submitted_at.replace("Z", "+00:00"))
+        except Exception:  # noqa: BLE001
+            submitted_at_dt = None
+
+        pdf_bytes = build_induction_pdf(
+            employee_id=employee_id,
+            employee=bundle["employee"],
+            medical=bundle["medical"],
+            havs=bundle["havs"],
+            documents_meta=documents_meta,
+            submitted_at=submitted_at_dt,
+        )
+        pdf_path = f"{storage_folder_path}pdf/induction-{employee_id}.pdf"
+        blob = bucket.blob(pdf_path)
+        blob.upload_from_string(pdf_bytes, content_type="application/pdf")
+        pdf_url = _make_public_url(bucket, blob)
+
+        # Stamp the PDF URL onto employee_documents
+        docs_doc_id = (bundle["documents"] or {}).get("__doc_id__")
+        if docs_doc_id:
+            db.collection("employee_documents").document(docs_doc_id).update({
+                "pdf_url": pdf_url,
+                "pdf_path": pdf_path,
+                "pdf_generated_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+        # Create employee_summary (HR master record)
+        summary = _flatten_for_summary(bundle, pdf_url, employee_id, storage_folder_path)
+        summary_ref = db.collection("employee_summary").document(employee_id)
+        existing_summary = summary_ref.get()
+        if not existing_summary.exists or not (existing_summary.to_dict() or {}).get("review_status"):
+            summary["review_status"] = "pending_review"
+        summary_ref.set(summary, merge=True)
+        logger.info(
+            "submit.pdf_generated project=%s employee_id=%s pdf_path=%s",
+            project_id, employee_id, pdf_path,
+        )
+    except Exception as exc:  # noqa: BLE001
+        # PDF failure is non-fatal: HR can regenerate later via /api/induction/finalize.
+        # Submission itself succeeded — we logged each created doc above.
+        logger.exception(
+            "submit.pdf_failed_non_blocking project=%s employee_id=%s err=%s",
+            project_id, employee_id, exc,
+        )
+
+    logger.info(
+        "submit.complete project=%s employee_id=%s pdf_url_present=%s",
+        project_id, employee_id, bool(pdf_url),
+    )
+    return SubmitInductionOut(
+        employee_id=employee_id,
+        pdf_url=pdf_url,
+        employee_summary_id=employee_id,
+        submitted_at=submitted_at,
+    )
+
+
 @api_router.post("/induction/finalize", response_model=FinalizeOut)
 async def finalize_induction(payload: FinalizeIn) -> FinalizeOut:
     # Import lazily so the module can load even without the SDK config (for tests).

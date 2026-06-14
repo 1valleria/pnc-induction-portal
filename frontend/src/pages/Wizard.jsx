@@ -2,13 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, CheckCircle2, Save } from "lucide-react";
-import {
-  collection,
-  addDoc,
-  setDoc,
-  serverTimestamp,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { uploadFile, uploadDataUrl, buildStorageFolderPath } from "@/lib/upload";
 import { loadProgress, saveProgress, clearProgress } from "@/lib/autosave";
 import { ProgressHeader } from "@/components/ProgressHeader";
@@ -198,65 +191,17 @@ export default function Wizard() {
     }
     setSubmitError(null);
     setSubmitting(true);
+    const apiBase = process.env.REACT_APP_BACKEND_URL || "";
+
     try {
       const submittedAt = new Date().toISOString();
-      // 1. Create employees doc
-      const employeesCol = collection(db, "employees");
-      const employeeRef = await addDoc(employeesCol, {
-        full_name: data.full_name,
-        dob: data.dob,
-        telephone: data.telephone,
-        email: data.email,
-        invited_email: session.invitedEmail,
-        address1: data.address1,
-        postcode: data.postcode,
-        ni_number: data.ni_number,
-        emergency_contact: {
-          name: data.emergency_name,
-          phone: data.emergency_phone,
-          relationship: data.emergency_relationship,
-        },
-        right_to_work_share_code: data.right_to_work_share_code,
-        dvla_check: data.dvla_check,
-        business: {
-          company_name: data.company_name,
-          bank_account: data.bank_account,
-          sort_code: data.sort_code,
-          utr: data.utr,
-          vat_number: data.vat_number || null,
-        },
-        insurance_option: data.insurance_option,
-        digital_signature_name: data.digital_signature_name,
-        access_code: session.accessCode,
-        access_code_id: session.accessCodeId,
-        submitted_at: submittedAt,
-        submitted_at_server: serverTimestamp(),
-        status: "submitted",
-      });
-      const employeeId = employeeRef.id;
 
-      // Build the human-friendly Storage folder path (only used for new submissions).
-      const storageFolderPath = buildStorageFolderPath(data.full_name, employeeId);
-
-      // 2. medical_history
-      await addDoc(collection(db, "medical_history"), {
-        employee_id: employeeId,
-        ...MEDICAL_QUESTIONS.reduce((acc, q) => ({ ...acc, [q.key]: medical[q.key] }), {}),
-        if_yes_details: medical.if_yes_details || "",
-        medication_disability_details: medical.medication_disability_details || "",
-        submitted_at: submittedAt,
-        submitted_at_server: serverTimestamp(),
-      });
-
-      // 3. havs_questionnaires
-      await addDoc(collection(db, "havs_questionnaires"), {
-        employee_id: employeeId,
-        ...HAVS_QUESTIONS.reduce((acc, q) => ({ ...acc, [q.key]: havs[q.key] }), {}),
-        submitted_at: submittedAt,
-        submitted_at_server: serverTimestamp(),
-      });
-
-      // 4. Uploads — using human-friendly folder path
+      // 1. Upload all files directly to Firebase Storage (browser → Storage only).
+      // The Storage folder path needs an id; we use the access_code_id so it's
+      // unique per inductee even before the backend assigns an employee_id.
+      // The backend will resolve / persist this same path on employee_documents.
+      console.info("[Wizard] uploading files to Storage");
+      const storageFolderPath = buildStorageFolderPath(data.full_name, session.accessCodeId);
       const uploads = {};
       if (files.passport)
         uploads.passport = await uploadFile(storageFolderPath, "passport", files.passport);
@@ -267,65 +212,82 @@ export default function Wizard() {
       if (files.insurance_certificate)
         uploads.insurance_certificate = await uploadFile(storageFolderPath, "insurance", files.insurance_certificate);
 
-      // 5. Signature image
+      // 2. Upload signature
       const signatureRes = await uploadDataUrl(
         storageFolderPath,
         "signature",
         data.signature_image_data_url,
-        `signature_${employeeId}.png`
+        `signature_${session.accessCodeId}.png`
       );
       uploads.signature = signatureRes;
+      console.info("[Wizard] uploads complete", Object.keys(uploads));
 
-      // 6. employee_documents doc
-      await addDoc(collection(db, "employee_documents"), {
-        employee_id: employeeId,
-        storage_folder_path: storageFolderPath,
-        files: uploads,
-        pdf_url: null, // generated server-side later
-        submitted_at: submittedAt,
-        submitted_at_server: serverTimestamp(),
+      // 3. Submit everything via the consolidated backend endpoint.
+      // Backend writes employees / medical_history / havs_questionnaires /
+      // employee_documents / employee_summary, marks the access code used,
+      // and generates the PDF — all via the Firebase Admin SDK.
+      const submitUrl = `${apiBase}/api/induction/submit`;
+      console.info("[Wizard] POST", submitUrl);
+      const resp = await fetch(submitUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_code_id: session.accessCodeId,
+          access_code: session.accessCode,
+          invited_email: session.invitedEmail,
+          full_name: data.full_name,
+          dob: data.dob,
+          telephone: data.telephone,
+          email: data.email,
+          address1: data.address1,
+          postcode: data.postcode,
+          ni_number: data.ni_number,
+          emergency_name: data.emergency_name,
+          emergency_phone: data.emergency_phone,
+          emergency_relationship: data.emergency_relationship,
+          right_to_work_share_code: data.right_to_work_share_code,
+          dvla_check: data.dvla_check,
+          company_name: data.company_name,
+          bank_account: data.bank_account,
+          sort_code: data.sort_code,
+          utr: data.utr,
+          vat_number: data.vat_number || null,
+          insurance_option: data.insurance_option,
+          digital_signature_name: data.digital_signature_name,
+          medical: {
+            ...MEDICAL_QUESTIONS.reduce((acc, q) => ({ ...acc, [q.key]: medical[q.key] }), {}),
+            if_yes_details: medical.if_yes_details || "",
+            medication_disability_details: medical.medication_disability_details || "",
+          },
+          havs: HAVS_QUESTIONS.reduce((acc, q) => ({ ...acc, [q.key]: havs[q.key] }), {}),
+          files: uploads,
+          storage_folder_path: storageFolderPath,
+          submitted_at: submittedAt,
+        }),
       });
 
-      // 7. Mark access code as used (via backend — server-side Admin SDK)
-      const apiBase = process.env.REACT_APP_BACKEND_URL || "";
-      try {
-        const resp = await fetch(`${apiBase}/api/access-code/mark-used`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            access_code_id: session.accessCodeId,
-            employee_id: employeeId,
-          }),
-        });
-        if (!resp.ok) {
-          console.warn("[Wizard] mark-used returned", resp.status);
+      if (!resp.ok) {
+        let detail = `HTTP ${resp.status}`;
+        try {
+          const body = await resp.json();
+          if (body && body.detail) detail = body.detail;
+        } catch {
+          // body wasn't JSON — keep the HTTP status detail
         }
-      } catch (err) {
-        console.warn("[Wizard] Failed to mark code used", err);
+        throw new Error(detail);
       }
 
-      // 8. Trigger server-side PDF generation + employee_summary (best-effort,
-      //    does not block the success screen if the backend is slow/unreachable)
-      try {
-        const resp = await fetch(`${apiBase}/api/induction/finalize`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ employee_id: employeeId }),
-        });
-        if (!resp.ok) {
-          console.warn("PDF finalize returned", resp.status);
-        }
-      } catch (err) {
-        console.warn("PDF finalize failed (will be retried by HR)", err);
-      }
+      const body = await resp.json();
+      console.info("[Wizard] submit success", body);
 
       clearProgress();
       sessionStorage.removeItem("pnc_session_v1");
-      navigate(`/success?id=${employeeId}`, { replace: true });
+      navigate(`/success?id=${body.employee_id}`, { replace: true });
     } catch (err) {
-      console.error(err);
+      console.error("[Wizard] submit failed", err);
+      const msg = err && err.message ? err.message : "Unknown error";
       setSubmitError(
-        "Something went wrong submitting your induction. Your progress is still saved — please try again, or contact PNC HR if the problem continues."
+        `Something went wrong submitting your induction: ${msg}. Your progress is still saved — please try again, or contact PNC Admin if the problem continues.`
       );
       setSubmitting(false);
     }
