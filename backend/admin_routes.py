@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import os
 import secrets
 from datetime import datetime, timezone
@@ -20,6 +21,7 @@ from pydantic import BaseModel, Field
 
 admin_router = APIRouter(prefix="/api/admin")
 _basic = HTTPBasic(realm="PNC Admin")
+logger = logging.getLogger("pnc.admin")
 
 
 # ---------------------------------------------------------------------------
@@ -437,6 +439,7 @@ async def create_invite(payload: InviteIn) -> dict[str, Any]:
     from email_templates import invitation
 
     db = _get_db()
+    project_id = getattr(db, "project", None) or os.environ.get("GOOGLE_CLOUD_PROJECT") or "<unknown>"
     code = _new_unique_code(db)
     now = datetime.now(timezone.utc).isoformat()
     portal_url = os.environ.get("PUBLIC_PORTAL_URL") or "https://pnc-induction.co.uk"
@@ -454,7 +457,36 @@ async def create_invite(payload: InviteIn) -> dict[str, Any]:
         "delivery": None,
     }
     ref = db.collection("access_codes").document()
-    ref.set(doc_payload)
+
+    # CRITICAL: persist the access code BEFORE sending email. If this write
+    # fails the endpoint must NOT report success — the inductee would have
+    # no way to log in. We also re-read the doc to confirm it lives in
+    # Firestore before the email goes out.
+    try:
+        ref.set(doc_payload)
+        verify_snap = ref.get()
+        if not verify_snap.exists:
+            raise RuntimeError("Firestore write reported success but document is missing on read-back")
+    except Exception as exc:  # noqa: BLE001 — surface ALL write failures to admin
+        logger.exception(
+            "invite.firestore_write_failed project=%s collection=access_codes "
+            "email=%s code=%s err=%s",
+            project_id, normalised_email, code, exc,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Failed to persist access code to Firestore. "
+                "Email has NOT been sent. Please retry — if the problem persists, "
+                "check Cloud Run logs for the 'invite.firestore_write_failed' entry."
+            ),
+        )
+
+    logger.info(
+        "invite.firestore_write_ok project=%s collection=access_codes "
+        "doc_id=%s code=%s email=%s full_name=%r",
+        project_id, ref.id, code, normalised_email, payload.full_name.strip(),
+    )
 
     email_result: dict[str, Any] | None = None
     if payload.send_email and normalised_email:
@@ -473,9 +505,17 @@ async def create_invite(payload: InviteIn) -> dict[str, Any]:
                 purpose="invitation",
             )
             ref.update({"delivery": email_result, "invite_status": "sent"})
+            logger.info(
+                "invite.email_sent doc_id=%s code=%s email=%s message_id=%s",
+                ref.id, code, normalised_email, (email_result or {}).get("message_id"),
+            )
         except EmailSendError as exc:
             ref.update({"invite_status": "failed", "delivery": {"status": "failed", "error": str(exc)}})
             email_result = {"status": "failed"}
+            logger.warning(
+                "invite.email_send_failed doc_id=%s code=%s email=%s err=%s",
+                ref.id, code, normalised_email, exc,
+            )
 
     invite_text = (
         "PNC Induction\n\n"
