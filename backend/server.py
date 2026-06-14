@@ -294,6 +294,78 @@ async def health() -> dict[str, Any]:
     return {"status": "ok", "service": "pnc-induction-api"}
 
 
+# ---------------------------------------------------------------------------
+# Public: validate an access code before letting the inductee enter the wizard.
+# Server-side validation removes the need for Firebase Web SDK reads on
+# `access_codes` and keeps every login attempt visible in Cloud Run logs.
+# ---------------------------------------------------------------------------
+
+
+class ValidateAccessCodeIn(BaseModel):
+    email: str = Field(..., min_length=3, max_length=200)
+    code: str = Field(..., min_length=4, max_length=64)
+
+
+@api_router.post("/validate-access-code")
+async def validate_access_code(payload: ValidateAccessCodeIn) -> dict[str, Any]:
+    from firebase_client import get_firestore
+    from google.cloud.firestore_v1.base_query import FieldFilter
+
+    code = (payload.code or "").strip().upper()
+    email = (payload.email or "").strip().lower()
+    if not code or not email:
+        logger.info("validate.bad_input email_present=%s code_present=%s", bool(email), bool(code))
+        return {"valid": False, "reason": "missing_fields"}
+
+    db = get_firestore()
+    project_id = getattr(db, "project", None) or "<unknown>"
+
+    # Look up by code only — there is exactly one document per code (uniqueness
+    # is enforced at invite creation time). Then verify email out-of-band.
+    snaps = list(
+        db.collection("access_codes")
+          .where(filter=FieldFilter("code", "==", code))
+          .limit(1)
+          .stream()
+    )
+    if not snaps:
+        logger.info(
+            "validate.not_found project=%s collection=access_codes code=%s email=%s",
+            project_id, code, email,
+        )
+        return {"valid": False, "reason": "not_recognised"}
+
+    snap = snaps[0]
+    data = snap.to_dict() or {}
+    stored_email = (data.get("email") or "").strip().lower() or None
+
+    if data.get("used"):
+        logger.info(
+            "validate.already_used project=%s doc_id=%s code=%s email=%s stored_email=%s",
+            project_id, snap.id, code, email, stored_email,
+        )
+        return {"valid": False, "reason": "already_used"}
+
+    if stored_email and stored_email != email:
+        logger.info(
+            "validate.email_mismatch project=%s doc_id=%s code=%s submitted_email=%s stored_email=%s",
+            project_id, snap.id, code, email, stored_email,
+        )
+        return {"valid": False, "reason": "email_mismatch"}
+
+    logger.info(
+        "validate.ok project=%s doc_id=%s code=%s email=%s",
+        project_id, snap.id, code, email,
+    )
+    return {
+        "valid": True,
+        "access_code_id": snap.id,
+        "code": code,
+        "email": stored_email or email,
+        "full_name": data.get("full_name") or "",
+    }
+
+
 @api_router.post("/induction/finalize", response_model=FinalizeOut)
 async def finalize_induction(payload: FinalizeIn) -> FinalizeOut:
     # Import lazily so the module can load even without the SDK config (for tests).
