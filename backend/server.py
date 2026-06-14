@@ -366,6 +366,68 @@ async def validate_access_code(payload: ValidateAccessCodeIn) -> dict[str, Any]:
     }
 
 
+class MarkCodeUsedIn(BaseModel):
+    access_code_id: str = Field(..., min_length=1, max_length=128)
+    employee_id: str = Field(..., min_length=1, max_length=128)
+
+
+@api_router.post("/access-code/mark-used")
+async def mark_access_code_used(payload: MarkCodeUsedIn) -> dict[str, Any]:
+    """Mark an access code as consumed after the inductee finalises the form.
+
+    Idempotent: a second call for the same access_code_id is a no-op and
+    still returns 200 — we never want a hiccup here to break the inductee's
+    submit flow.
+    """
+    from firebase_client import get_firestore
+
+    db = get_firestore()
+    project_id = getattr(db, "project", None) or "<unknown>"
+    access_code_id = payload.access_code_id.strip()
+    employee_id = payload.employee_id.strip()
+
+    ref = db.collection("access_codes").document(access_code_id)
+    snap = ref.get()
+    if not snap.exists:
+        logger.warning(
+            "mark_used.not_found project=%s collection=access_codes doc_id=%s employee_id=%s",
+            project_id, access_code_id, employee_id,
+        )
+        raise HTTPException(status_code=404, detail="access_code_id not found")
+
+    data = snap.to_dict() or {}
+    already_used = bool(data.get("used"))
+
+    try:
+        ref.update({
+            "used": True,
+            "used_at": datetime.now(timezone.utc).isoformat(),
+            "used_at_server": datetime.now(timezone.utc),
+            "employee_id": employee_id,
+        })
+    except Exception as exc:  # noqa: BLE001 — surface every write failure
+        logger.exception(
+            "mark_used.write_failed project=%s doc_id=%s employee_id=%s err=%s",
+            project_id, access_code_id, employee_id, exc,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="Failed to mark access code as used. Please retry.",
+        )
+
+    logger.info(
+        "mark_used.ok project=%s doc_id=%s code=%s employee_id=%s previously_used=%s",
+        project_id, access_code_id, data.get("code"), employee_id, already_used,
+    )
+    return {
+        "ok": True,
+        "access_code_id": access_code_id,
+        "employee_id": employee_id,
+        "code": data.get("code"),
+        "previously_used": already_used,
+    }
+
+
 @api_router.post("/induction/finalize", response_model=FinalizeOut)
 async def finalize_induction(payload: FinalizeIn) -> FinalizeOut:
     # Import lazily so the module can load even without the SDK config (for tests).

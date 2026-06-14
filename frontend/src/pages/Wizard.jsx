@@ -4,10 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, CheckCircle2, Save } from "lucide-react";
 import {
   collection,
-  doc,
   addDoc,
   setDoc,
-  updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -288,20 +286,26 @@ export default function Wizard() {
         submitted_at_server: serverTimestamp(),
       });
 
-      // 7. Mark access code as used
+      // 7. Mark access code as used (via backend — server-side Admin SDK)
+      const apiBase = process.env.REACT_APP_BACKEND_URL || "";
       try {
-        await updateDoc(doc(db, "access_codes", session.accessCodeId), {
-          used: true,
-          used_at: serverTimestamp(),
-          employee_id: employeeId,
+        const resp = await fetch(`${apiBase}/api/access-code/mark-used`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            access_code_id: session.accessCodeId,
+            employee_id: employeeId,
+          }),
         });
+        if (!resp.ok) {
+          console.warn("[Wizard] mark-used returned", resp.status);
+        }
       } catch (err) {
-        console.warn("Failed to mark code used", err);
+        console.warn("[Wizard] Failed to mark code used", err);
       }
 
       // 8. Trigger server-side PDF generation + employee_summary (best-effort,
       //    does not block the success screen if the backend is slow/unreachable)
-      const apiBase = process.env.REACT_APP_BACKEND_URL || "";
       try {
         const resp = await fetch(`${apiBase}/api/induction/finalize`, {
           method: "POST",
