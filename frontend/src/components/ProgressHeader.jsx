@@ -4,11 +4,13 @@ import { Save } from "lucide-react";
 const STEP_TITLES = [
   "Personal Information",
   "Medical History & HAVS",
+  "Tool Box Talks – Health & Safety",
+  "Site Rules",
   "Digital Signature & Submit",
 ];
 
 export const ProgressHeader = ({ step, savedAt }) => {
-  const total = 3;
+  const total = STEP_TITLES.length;
   const pct = ((step + 1) / total) * 100;
   return (
     <div className="sticky top-0 z-50 bg-white/85 backdrop-blur-xl border-b border-[#E7E5E4]">

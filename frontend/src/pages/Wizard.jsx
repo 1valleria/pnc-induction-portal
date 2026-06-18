@@ -7,8 +7,11 @@ import { loadProgress, saveProgress, clearProgress } from "@/lib/autosave";
 import { ProgressHeader } from "@/components/ProgressHeader";
 import { SectionPersonal } from "@/components/sections/SectionPersonal";
 import { SectionMedical } from "@/components/sections/SectionMedical";
+import { SectionHealthSafety } from "@/components/sections/SectionHealthSafety";
+import { SectionSiteRules } from "@/components/sections/SectionSiteRules";
 import { SectionSignature } from "@/components/sections/SectionSignature";
 import { MEDICAL_QUESTIONS, HAVS_QUESTIONS } from "@/lib/constants";
+import { HEALTH_SAFETY_KEYS } from "@/data/complianceContent";
 import { WIZARD } from "@/constants/testIds";
 import { toast } from "sonner";
 
@@ -42,6 +45,9 @@ const EMPTY_MEDICAL = {
   medication_disability_details: "",
 };
 const EMPTY_HAVS = {};
+const EMPTY_HS_ACK = {}; // {section_key: ISO timestamp}
+const TOTAL_STEPS = 5;
+const LAST_STEP = TOTAL_STEPS - 1;
 
 export default function Wizard() {
   const navigate = useNavigate();
@@ -66,6 +72,8 @@ export default function Wizard() {
       },
       medical: { ...EMPTY_MEDICAL, ...(saved.medical || {}) },
       havs: { ...EMPTY_HAVS, ...(saved.havs || {}) },
+      hsAck: { ...EMPTY_HS_ACK, ...(saved.hsAck || {}) },
+      siteRulesAck: saved.siteRulesAck || null,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -74,6 +82,8 @@ export default function Wizard() {
   const [data, setData] = useState(initial.data);
   const [medical, setMedical] = useState(initial.medical);
   const [havs, setHavs] = useState(initial.havs);
+  const [hsAck, setHsAck] = useState(initial.hsAck);
+  const [siteRulesAck, setSiteRulesAck] = useState(initial.siteRulesAck);
   const [files, setFiles] = useState({});
   const [errors, setErrors] = useState({});
   const [savedAt, setSavedAt] = useState(null);
@@ -91,11 +101,11 @@ export default function Wizard() {
   useEffect(() => {
     if (!interactedRef.current) return;
     const t = setTimeout(() => {
-      saveProgress({ data, medical, havs, step });
+      saveProgress({ data, medical, havs, hsAck, siteRulesAck, step });
       setSavedAt(Date.now());
     }, 400);
     return () => clearTimeout(t);
-  }, [data, medical, havs, step]);
+  }, [data, medical, havs, hsAck, siteRulesAck, step]);
 
   const update = (patch) => {
     interactedRef.current = true;
@@ -108,6 +118,14 @@ export default function Wizard() {
   const updateHavs = (patch) => {
     interactedRef.current = true;
     setHavs((h) => ({ ...h, ...patch }));
+  };
+  const acknowledgeHealthSafety = (sectionKey) => {
+    interactedRef.current = true;
+    setHsAck((prev) => (prev[sectionKey] ? prev : { ...prev, [sectionKey]: new Date().toISOString() }));
+  };
+  const acknowledgeSiteRules = () => {
+    interactedRef.current = true;
+    setSiteRulesAck((cur) => cur || new Date().toISOString());
   };
   const setFile = (key, f) => {
     interactedRef.current = true;
@@ -153,6 +171,17 @@ export default function Wizard() {
       if (missingHavs) e.havs_all = "Please answer every HAVS question.";
     }
     if (s === 2) {
+      const missing = HEALTH_SAFETY_KEYS.filter((k) => !hsAck[k]).length;
+      if (missing > 0) {
+        e.health_safety_all = `Please mark all ${HEALTH_SAFETY_KEYS.length} Tool Box Talks as Compliant before continuing (${missing} remaining).`;
+      }
+    }
+    if (s === 3) {
+      if (!siteRulesAck) {
+        e.site_rules = "Please press Compliant on the Site Rules section before continuing.";
+      }
+    }
+    if (s === 4) {
       if (!data.digital_signature_name || data.digital_signature_name.trim().length < 2)
         e.digital_signature_name = "Please type your full legal name";
       if (!data.signature_image_data_url)
@@ -166,11 +195,14 @@ export default function Wizard() {
     setErrors(e);
     if (Object.keys(e).length === 0) {
       window.scrollTo({ top: 0, behavior: "smooth" });
-      setStep((s) => Math.min(2, s + 1));
+      setStep((s) => Math.min(LAST_STEP, s + 1));
     } else {
-      // surface first missing file as toast
       if (e.passport || e.driving_licence || e.bank_proof || e.insurance_certificate) {
         toast.error("Please upload all required documents.");
+      } else if (e.health_safety_all) {
+        toast.error("Please mark every Tool Box Talk as Compliant.");
+      } else if (e.site_rules) {
+        toast.error("Please press Compliant on the Site Rules.");
       } else {
         toast.error("Please complete the highlighted fields.");
       }
@@ -183,10 +215,16 @@ export default function Wizard() {
   };
 
   const handleSubmit = async () => {
-    const e = validateStep(2);
-    setErrors(e);
-    if (Object.keys(e).length > 0) {
-      toast.error("Please complete the signature section.");
+    // Final guard — every previous step's validation must still pass.
+    const errs = {};
+    Object.assign(errs, validateStep(2), validateStep(3), validateStep(4));
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) {
+      if (errs.health_safety_all || errs.site_rules) {
+        toast.error("Please confirm Health & Safety and Site Rules before submitting.");
+      } else {
+        toast.error("Please complete the signature section.");
+      }
       return;
     }
     setSubmitError(null);
@@ -260,6 +298,14 @@ export default function Wizard() {
             medication_disability_details: medical.medication_disability_details || "",
           },
           havs: HAVS_QUESTIONS.reduce((acc, q) => ({ ...acc, [q.key]: havs[q.key] }), {}),
+          health_safety_sections: hsAck,
+          health_safety_acknowledged: HEALTH_SAFETY_KEYS.every((k) => Boolean(hsAck[k])),
+          health_safety_completed_at:
+            HEALTH_SAFETY_KEYS.every((k) => Boolean(hsAck[k]))
+              ? Object.values(hsAck).sort().slice(-1)[0]
+              : null,
+          site_rules_acknowledged: Boolean(siteRulesAck),
+          site_rules_completed_at: siteRulesAck || null,
           files: uploads,
           storage_folder_path: storageFolderPath,
           submitted_at: submittedAt,
@@ -334,6 +380,20 @@ export default function Wizard() {
               />
             )}
             {step === 2 && (
+              <SectionHealthSafety
+                hsAck={hsAck}
+                onAcknowledge={acknowledgeHealthSafety}
+                errors={errors}
+              />
+            )}
+            {step === 3 && (
+              <SectionSiteRules
+                siteRulesAck={siteRulesAck}
+                onAcknowledge={acknowledgeSiteRules}
+                errors={errors}
+              />
+            )}
+            {step === 4 && (
               <SectionSignature data={data} update={update} errors={errors} />
             )}
           </motion.div>
@@ -363,7 +423,7 @@ export default function Wizard() {
           ) : (
             <div className="flex-1" />
           )}
-          {step < 2 ? (
+          {step < LAST_STEP ? (
             <button
               type="button"
               onClick={handleNext}

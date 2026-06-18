@@ -256,6 +256,12 @@ def _flatten_for_summary(bundle: dict, pdf_url: str, employee_id: str, storage_f
         "digital_signature_name": emp.get("digital_signature_name"),
         "submitted_at": emp.get("submitted_at"),
         "access_code": emp.get("access_code"),
+        # --- compliance acknowledgements (default false for legacy records)
+        "health_safety_acknowledged": bool(emp.get("health_safety_acknowledged")),
+        "health_safety_completed_at": emp.get("health_safety_completed_at"),
+        "health_safety_sections": emp.get("health_safety_sections") or {},
+        "site_rules_acknowledged": bool(emp.get("site_rules_acknowledged")),
+        "site_rules_completed_at": emp.get("site_rules_completed_at"),
         # --- file URLs (the master HR record)
         "passport_url": url_of("passport"),
         "driving_licence_url": url_of("driving_licence"),
@@ -470,6 +476,12 @@ class SubmitInductionIn(BaseModel):
     # Canonical storage folder path (built client-side from slug + employee_id placeholder)
     storage_folder_path: str = Field(..., min_length=1, max_length=300)
     submitted_at: str = Field(..., min_length=1, max_length=40)
+    # Compliance acknowledgements (mandatory)
+    health_safety_acknowledged: bool = Field(default=False)
+    health_safety_completed_at: str | None = Field(default=None, max_length=40)
+    health_safety_sections: dict[str, str] = Field(default_factory=dict)
+    site_rules_acknowledged: bool = Field(default=False)
+    site_rules_completed_at: str | None = Field(default=None, max_length=40)
 
 
 class SubmitInductionOut(BaseModel):
@@ -500,6 +512,23 @@ async def submit_induction(payload: SubmitInductionIn) -> SubmitInductionOut:
     project_id = getattr(db, "project", None) or "<unknown>"
     server_now = datetime.now(timezone.utc)
     submitted_at = payload.submitted_at
+
+    # Mandatory compliance gate — backend authoritative check.
+    from compliance_content import HEALTH_SAFETY_KEYS
+    missing_hs = [k for k in HEALTH_SAFETY_KEYS if not payload.health_safety_sections.get(k)]
+    if missing_hs or not payload.health_safety_acknowledged or not payload.site_rules_acknowledged:
+        logger.warning(
+            "submit.compliance_blocked project=%s email=%s missing_hs=%s hs_ack=%s site_rules_ack=%s",
+            project_id, payload.email, missing_hs,
+            payload.health_safety_acknowledged, payload.site_rules_acknowledged,
+        )
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Please confirm that you have read and understood the Health & Safety "
+                "information and Site Rules before submitting your induction."
+            ),
+        )
 
     logger.info(
         "submit.start project=%s access_code_id=%s code=%s email=%s",
@@ -537,6 +566,12 @@ async def submit_induction(payload: SubmitInductionIn) -> SubmitInductionOut:
         "submitted_at": submitted_at,
         "submitted_at_server": server_now,
         "status": "submitted",
+        # Compliance acknowledgements
+        "health_safety_acknowledged": True,
+        "health_safety_completed_at": payload.health_safety_completed_at or server_now.isoformat(),
+        "health_safety_sections": payload.health_safety_sections,
+        "site_rules_acknowledged": True,
+        "site_rules_completed_at": payload.site_rules_completed_at or server_now.isoformat(),
     }
     try:
         _, emp_ref = db.collection("employees").add(employee_payload)

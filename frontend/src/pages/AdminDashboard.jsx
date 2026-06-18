@@ -72,6 +72,45 @@ const StatusPill = ({ value, tone }) => (
 );
 
 function Cell({ col, value, row, onChangeReview }) {
+  if (col.kind === "compliance") {
+    const hsOk = Boolean(row && row.health_safety_acknowledged);
+    const srOk = Boolean(row && row.site_rules_acknowledged);
+    if (hsOk && srOk) {
+      return (
+        <div className="flex flex-col gap-1" data-testid="compliance-cell-complete">
+          <span className="inline-flex items-center gap-1 text-[#166534] text-[11px] font-medium whitespace-nowrap">
+            <CheckCircle2 className="h-3 w-3" /> Health &amp; Safety
+          </span>
+          <span className="inline-flex items-center gap-1 text-[#166534] text-[11px] font-medium whitespace-nowrap">
+            <CheckCircle2 className="h-3 w-3" /> Site Rules
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div className="flex flex-col gap-1" data-testid="compliance-cell-incomplete">
+        <span
+          className={`inline-flex items-center gap-1 text-[11px] font-medium whitespace-nowrap ${
+            hsOk ? "text-[#166534]" : "text-[#B91C1C]"
+          }`}
+        >
+          {hsOk ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+          Health &amp; Safety
+        </span>
+        <span
+          className={`inline-flex items-center gap-1 text-[11px] font-medium whitespace-nowrap ${
+            srOk ? "text-[#166534]" : "text-[#B91C1C]"
+          }`}
+        >
+          {srOk ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+          Site Rules
+        </span>
+        {!hsOk && !srOk && (
+          <span className="text-[10px] text-[#A8A29E]">Not Completed</span>
+        )}
+      </div>
+    );
+  }
   if (value === null || value === undefined || value === "") {
     if (col.kind === "doc") return <span className="text-[#A8A29E] text-xs">—</span>;
     return <span className="text-[#A8A29E]">—</span>;

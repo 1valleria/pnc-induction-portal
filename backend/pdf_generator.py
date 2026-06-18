@@ -456,5 +456,89 @@ def build_induction_pdf(
         )
     )
 
+    # ---- Compliance Acknowledgements (summary) ----
+    from reportlab.platypus import PageBreak
+    try:
+        from compliance_content import HEALTH_SAFETY_SECTIONS, SITE_RULES
+    except Exception:  # noqa: BLE001 — defensive; backend module must exist
+        HEALTH_SAFETY_SECTIONS = []
+        SITE_RULES = []
+
+    hs_ack = bool(employee.get("health_safety_acknowledged"))
+    hs_completed = employee.get("health_safety_completed_at") or "—"
+    sr_ack = bool(employee.get("site_rules_acknowledged"))
+    sr_completed = employee.get("site_rules_completed_at") or "—"
+    hs_sections = employee.get("health_safety_sections") or {}
+
+    story.append(PageBreak())
+    story.append(Paragraph("Compliance Acknowledgements", styles["section"]))
+    story.append(
+        _kv_table(
+            [
+                ("Health & Safety Tool Box Talks — Acknowledged", "YES" if hs_ack else "NO"),
+                ("Health & Safety — Date", hs_completed),
+                ("Site Rules — Acknowledged", "YES" if sr_ack else "NO"),
+                ("Site Rules — Date", sr_completed),
+            ],
+            styles,
+        )
+    )
+    if HEALTH_SAFETY_SECTIONS:
+        story.append(Spacer(1, 6))
+        story.append(Paragraph("Per-section Tool Box Talk acknowledgements:", styles["body"]))
+        rows: list[tuple[str, str]] = []
+        for sec in HEALTH_SAFETY_SECTIONS:
+            ts = hs_sections.get(sec["key"]) or "—"
+            rows.append((sec["title"], ts))
+        story.append(_kv_table(rows, styles))
+
+    # ---- Appendix A: Tool Box Talks - Health & Safety (full content) ----
+    if HEALTH_SAFETY_SECTIONS:
+        story.append(PageBreak())
+        story.append(Paragraph("Appendix A — Tool Box Talks – Health & Safety", styles["section"]))
+        story.append(
+            Paragraph(
+                "The full text of each Tool Box Talk the inductee read and acknowledged "
+                "is reproduced below for the compliance record.",
+                styles["body"],
+            )
+        )
+        story.append(Spacer(1, 6))
+        for sec in HEALTH_SAFETY_SECTIONS:
+            ts = hs_sections.get(sec["key"]) or "—"
+            story.append(Spacer(1, 4))
+            story.append(Paragraph(sec["title"], styles["kicker"]))
+            story.append(
+                Paragraph(
+                    f"<b>Acknowledged:</b> {'YES' if hs_sections.get(sec['key']) else 'NO'}"
+                    f" &nbsp;&nbsp; <b>Date:</b> {ts}",
+                    styles["body"],
+                )
+            )
+            story.append(Spacer(1, 2))
+            for para in sec["body"]:
+                # Escape ampersand for ReportLab's mini-XML parser
+                safe_para = para.replace("&", "&amp;")
+                story.append(Paragraph(safe_para, styles["body"]))
+                story.append(Spacer(1, 2))
+            story.append(Spacer(1, 6))
+
+    # ---- Appendix B: Site Rules (full content) ----
+    if SITE_RULES:
+        story.append(PageBreak())
+        story.append(Paragraph("Appendix B — Site Rules", styles["section"]))
+        story.append(
+            Paragraph(
+                f"<b>Acknowledged:</b> {'YES' if sr_ack else 'NO'}"
+                f" &nbsp;&nbsp; <b>Date:</b> {sr_completed}",
+                styles["body"],
+            )
+        )
+        story.append(Spacer(1, 6))
+        for i, rule in enumerate(SITE_RULES, 1):
+            safe_rule = rule.replace("&", "&amp;")
+            story.append(Paragraph(f"{i}. {safe_rule}", styles["body"]))
+            story.append(Spacer(1, 3))
+
     doc.build(story)
     return buf.getvalue()

@@ -77,6 +77,8 @@ CSV_SCHEMA: list[tuple[str, str]] = [
     ("UTR", "utr"),
     ("Review Status", "review_status"),
     ("PDF Link", "pdf_url"),
+    ("Health & Safety Completed", "health_safety_acknowledged"),
+    ("Site Rules Completed", "site_rules_acknowledged"),
     # Identity column kept last so it's easy to ignore when humans read the
     # spreadsheet but available for scripts that need a stable key.
     ("Employee ID", "employee_id"),
@@ -90,7 +92,11 @@ CSV_COLUMNS: list[str] = [label for label, _ in CSV_SCHEMA]
 def _format_csv_value(label: str, value: Any) -> str:
     """Tighten a few columns for HR readability."""
     if value is None or value == "":
+        if label in ("Health & Safety Completed", "Site Rules Completed"):
+            return "NO"
         return ""
+    if label in ("Health & Safety Completed", "Site Rules Completed"):
+        return "YES" if bool(value) else "NO"
     if isinstance(value, bool):
         return "Yes" if value else "No"
     if label == "Driving Licence Check":
