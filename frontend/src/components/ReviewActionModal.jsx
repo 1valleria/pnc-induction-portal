@@ -49,11 +49,24 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
 
   const canSubmit = isReject ? note.trim().length > 0 : true;
 
+  const parseManagerEmails = (raw) => {
+    return (raw || "")
+      .split(/[,;\n]/)
+      .map((e) => e.trim())
+      .filter((e) => e.length > 0);
+  };
+
   const handleSubmit = async (e) => {
     e?.preventDefault?.();
     if (!canSubmit || sending) return;
-    if (managerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(managerEmail.trim())) {
-      setManagerError("Please enter a valid manager email address.");
+    const emails = parseManagerEmails(managerEmail);
+    const invalid = emails.filter((addr) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr));
+    if (invalid.length > 0) {
+      setManagerError(
+        invalid.length === 1
+          ? `Invalid email address: ${invalid[0]}`
+          : `Invalid email addresses: ${invalid.join(", ")}`
+      );
       return;
     }
     setManagerError(null);
@@ -62,7 +75,8 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
       const result = await onConfirm({
         review_status: isReject ? "rejected" : "approved",
         review_note: isReject ? note.trim() : undefined,
-        manager_email: managerEmail.trim() || undefined,
+        manager_email: emails.join(", ") || undefined,
+        manager_count: emails.length,
       });
       if (isReject && result && result.new_access_code) {
         setResubmitResult(result);
@@ -193,12 +207,12 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
                   required
                 />
               </Field>
-              <Field label="Manager Email" hint="Optional — sends a copy of the rejection notice to the inductee's manager." error={managerError}>
+              <Field label="Manager Email(s)" hint="Enter one or more email addresses separated by commas. Optional — copies the rejection notice to the inductee's manager(s)." error={managerError}>
                 <TextInput
                   data-testid="review-modal-manager-email"
                   value={managerEmail}
                   onChange={(e) => setManagerEmail(e.target.value)}
-                  placeholder="manager@example.com"
+                  placeholder="manager1@company.com, manager2@company.com"
                   type="text"
                   inputMode="email"
                 />
@@ -213,12 +227,12 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
               <p className="text-sm text-[#1C1917] leading-relaxed">
                 The inductee will be marked <b>Approved</b> and immediately notified by email that they are cleared to start.
               </p>
-              <Field label="Manager Email" hint="Optional — sends a copy of the approval notice to the inductee's manager." error={managerError}>
+              <Field label="Manager Email(s)" hint="Enter one or more email addresses separated by commas. Optional — copies the approval notice to the inductee's manager(s)." error={managerError}>
                 <TextInput
                   data-testid="review-modal-manager-email"
                   value={managerEmail}
                   onChange={(e) => setManagerEmail(e.target.value)}
-                  placeholder="manager@example.com"
+                  placeholder="manager1@company.com, manager2@company.com"
                   type="text"
                   inputMode="email"
                 />

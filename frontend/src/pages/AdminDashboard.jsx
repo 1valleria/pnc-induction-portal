@@ -204,7 +204,7 @@ export default function AdminDashboard() {
   /** Actually submit the review (called both for "pending_review" picks and
    *  modal confirmations). Returns the backend response so the modal can
    *  reveal the freshly minted access code after a rejection. */
-  const submitReview = async ({ employeeId, review_status, review_note, manager_email }) => {
+  const submitReview = async ({ employeeId, review_status, review_note, manager_email, manager_count }) => {
     try {
       const body = { review_status };
       if (review_note !== undefined) body.review_note = review_note;
@@ -223,6 +223,7 @@ export default function AdminDashboard() {
                 review_status,
                 review_note: review_note ?? r.review_note,
                 manager_email: data.manager_email ?? r.manager_email,
+                manager_emails: data.manager_emails ?? r.manager_emails,
                 manager_notified_at: data.manager_notified_at ?? r.manager_notified_at,
                 resubmission_code: data.new_access_code ?? r.resubmission_code,
                 resubmission_requested:
@@ -232,16 +233,28 @@ export default function AdminDashboard() {
         )
       );
 
-      const managerSent = data.manager_email_status === "sent";
+      const mgrStatus = data.manager_email_status;
+      const mgrCount = Array.isArray(data.manager_emails) ? data.manager_emails.length : (manager_count || 0);
+      const mgrLabel = mgrCount > 1 ? `${mgrCount} managers` : "manager";
+      const mgrSent = mgrStatus === "sent";
+      const mgrPartial = mgrStatus === "partial";
+      const mgrFailed = mgrStatus === "failed";
+
       if (review_status === "approved") {
         setReviewModal(null);
-        if (managerSent) toast.success("Employee approved and manager notified");
+        if (mgrSent) toast.success(`Employee approved and ${mgrLabel} notified`);
+        else if (mgrPartial) toast.warning(`Employee approved · some manager emails failed (check Cloud Run logs)`);
+        else if (mgrFailed) toast.warning(`Employee approved · manager email(s) failed to send`);
         else if (data.email_status === "sent") toast.success("Employee approved");
         else if (data.email_status === "failed") toast.error("Approved · employee email failed");
         else toast.success("Employee approved");
       } else if (review_status === "rejected") {
-        if (managerSent) {
-          toast.success("Employee rejected and manager notified");
+        if (mgrSent) {
+          toast.success(`Employee rejected and ${mgrLabel} notified`);
+        } else if (mgrPartial) {
+          toast.warning("Employee rejected · some manager emails failed (check Cloud Run logs)");
+        } else if (mgrFailed) {
+          toast.warning("Employee rejected · manager email(s) failed to send");
         } else if (data.email_status === "sent") {
           toast.success("Employee rejected and resubmission code sent");
         } else if (data.email_status === "failed") {
@@ -467,12 +480,13 @@ export default function AdminDashboard() {
         employeeName={reviewModal?.name}
         employeeEmail={reviewModal?.email}
         onClose={() => setReviewModal(null)}
-        onConfirm={async ({ review_status, review_note, manager_email }) => {
+        onConfirm={async ({ review_status, review_note, manager_email, manager_count }) => {
           return await submitReview({
             employeeId: reviewModal.employee_id,
             review_status,
             review_note,
             manager_email,
+            manager_count,
           });
         }}
       />

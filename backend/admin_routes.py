@@ -172,7 +172,49 @@ def _stream_employees(records: list[dict]):
 class ReviewIn(BaseModel):
     review_status: str = Field(..., pattern="^(pending_review|approved|rejected)$")
     review_note: str | None = Field(default=None, max_length=2000)
-    manager_email: str | None = Field(default=None, max_length=200)
+    # Accept either a comma-separated string (existing frontend contract)
+    # or an explicit list of emails. Backend normalises to a deduped list.
+    manager_email: str | None = Field(default=None, max_length=2000)
+    manager_emails: list[str] | None = Field(default=None, max_length=20)
+
+
+def _parse_manager_emails(raw_str: str | None, raw_list: list[str] | None) -> list[str]:
+    """Parse, validate and dedupe manager email addresses.
+
+    Accepts either a comma/semicolon-separated string OR an explicit list.
+    Empties produced by extra commas/whitespace are silently dropped.
+    Returns a deduped, lower-cased list. Raises HTTPException 422 if any
+    entry is malformed.
+    """
+    import re
+
+    raw_entries: list[str] = []
+    if raw_str:
+        raw_entries.extend(re.split(r"[,;\n]", raw_str))
+    if raw_list:
+        raw_entries.extend(raw_list)
+
+    seen: set[str] = set()
+    cleaned: list[str] = []
+    invalid: list[str] = []
+    for entry in raw_entries:
+        e = (entry or "").strip().lower()
+        if not e:
+            continue
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", e):
+            invalid.append(entry.strip())
+            continue
+        if e in seen:
+            continue
+        seen.add(e)
+        cleaned.append(e)
+
+    if invalid:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid manager email address(es): {', '.join(invalid)}",
+        )
+    return cleaned
 
 
 def _get_db():
@@ -257,6 +299,10 @@ async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str,
     from email_service import EmailSendError, send_email
     from email_templates import approval, rejection
 
+    # Validate manager emails up-front so a malformed list never lets the
+    # review status mutate Firestore. Empty list (no recipients) is OK.
+    manager_emails_list = _parse_manager_emails(payload.manager_email, payload.manager_emails)
+
     db = _get_db()
     doc_ref = db.collection("employee_summary").document(employee_id)
     snap = doc_ref.get()
@@ -335,15 +381,10 @@ async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str,
     }
 
     # Manager-notification side-effect. Always after the inductee email so a
-    # failure here never blocks the primary path.
-    manager_email_raw = (payload.manager_email or "").strip()
+    # failure here never blocks the primary path. Supports multiple recipients.
+    # (manager_emails_list was validated up-front, before any DB mutations.)
     manager_status: str | None = None
-    if manager_email_raw and payload.review_status in {"approved", "rejected"}:
-        # Basic RFC-5322-lite validation. Pydantic v1 lacks EmailStr by default
-        # in this project, so we keep a small inline guard.
-        import re
-        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", manager_email_raw):
-            raise HTTPException(status_code=422, detail="manager_email is not a valid email address")
+    if manager_emails_list and payload.review_status in {"approved", "rejected"}:
         from email_templates import manager_approval, manager_rejection
         try:
             company_name = rec.get("company_name") or (rec.get("business") or {}).get("company_name")
@@ -363,27 +404,51 @@ async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str,
                     note=payload.review_note,
                 )
                 purpose = "manager_rejection_notification"
-            m_result = await send_email(
-                db,
-                to=manager_email_raw,
-                subject=m_subject,
-                html=m_html,
-                purpose=purpose,
-                employee_id=employee_id,
-            )
-            manager_status = m_result.get("status")
-            # Persist on employee_summary
+
+            sent_count = 0
+            failed_recipients: list[str] = []
+            for m_addr in manager_emails_list:
+                try:
+                    m_result = await send_email(
+                        db,
+                        to=m_addr,
+                        subject=m_subject,
+                        html=m_html,
+                        purpose=purpose,
+                        employee_id=employee_id,
+                    )
+                    if m_result.get("status") == "sent":
+                        sent_count += 1
+                    else:
+                        failed_recipients.append(m_addr)
+                except EmailSendError:
+                    failed_recipients.append(m_addr)
+
+            if failed_recipients and sent_count == 0:
+                manager_status = "failed"
+            elif failed_recipients:
+                manager_status = "partial"
+            else:
+                manager_status = "sent"
+
+            # Persist on employee_summary. Store the deduped list AND a
+            # back-compat comma-joined string so existing reads / CSV exports
+            # continue to work without migration.
+            manager_email_joined = ", ".join(manager_emails_list)
             now_iso2 = datetime.now(timezone.utc).isoformat()
             doc_ref.update({
-                "manager_email": manager_email_raw,
+                "manager_emails": manager_emails_list,
+                "manager_email": manager_email_joined,
                 "manager_notified_at": now_iso2,
             })
-            update["manager_email"] = manager_email_raw
+            update["manager_emails"] = manager_emails_list
+            update["manager_email"] = manager_email_joined
             update["manager_notified_at"] = now_iso2
             response.update(update)
         except EmailSendError:
             manager_status = "failed"
-        response["manager_email"] = manager_email_raw
+        response["manager_emails"] = manager_emails_list
+        response["manager_email"] = ", ".join(manager_emails_list)
         response["manager_email_status"] = manager_status
     if new_access_code:
         invitation_text = (
