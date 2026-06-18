@@ -5,7 +5,7 @@ import { TextInput } from "@/components/Field";
 import InviteModal from "@/components/InviteModal";
 import ReviewActionModal from "@/components/ReviewActionModal";
 import TestModeBanner from "@/components/TestModeBanner";
-import { Download, LogOut, RefreshCw, Search, ShieldCheck, ExternalLink, CheckCircle2, XCircle, Clock, UserPlus } from "lucide-react";
+import { Download, LogOut, Mail, RefreshCw, Search, ShieldCheck, ExternalLink, CheckCircle2, XCircle, Clock, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 // The exact column order PNC's existing subcontractor spreadsheet uses.
@@ -71,7 +71,7 @@ const StatusPill = ({ value, tone }) => (
   </span>
 );
 
-function Cell({ col, value, onChangeReview }) {
+function Cell({ col, value, row, onChangeReview }) {
   if (value === null || value === undefined || value === "") {
     if (col.kind === "doc") return <span className="text-[#A8A29E] text-xs">—</span>;
     return <span className="text-[#A8A29E]">—</span>;
@@ -115,16 +115,35 @@ function Cell({ col, value, onChangeReview }) {
       );
     case "review": {
       const v = String(value);
+      const managerEmails = (row && Array.isArray(row.manager_emails)) ? row.manager_emails : [];
+      const managerCount = managerEmails.length > 0
+        ? managerEmails.length
+        : (row && row.manager_email
+            ? row.manager_email.split(/[,;]/).map((s) => s.trim()).filter(Boolean).length
+            : 0);
       return (
-        <select
-          value={v}
-          onChange={(e) => onChangeReview(e.target.value)}
-          className={`text-[11px] font-medium px-2 py-1 rounded-full border focus:outline-none focus:ring-2 focus:ring-[#166534]/30 ${REVIEW_TONE[v] || REVIEW_TONE.pending_review}`}
-        >
-          <option value="pending_review">Pending Review</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-        </select>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <select
+            value={v}
+            onChange={(e) => onChangeReview(e.target.value)}
+            className={`text-[11px] font-medium px-2 py-1 rounded-full border focus:outline-none focus:ring-2 focus:ring-[#166534]/30 ${REVIEW_TONE[v] || REVIEW_TONE.pending_review}`}
+            data-testid="admin-row-review-select"
+          >
+            <option value="pending_review">Pending Review</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          {managerCount > 0 && (
+            <span
+              data-testid="admin-row-manager-chip"
+              title={managerEmails.length > 0 ? managerEmails.join(", ") : (row.manager_email || "")}
+              className="inline-flex items-center gap-1 rounded-full border border-[#E7E5E4] bg-[#FAFAF9] text-[#57534E] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap"
+            >
+              <Mail className="h-3 w-3" />
+              Manager: {managerCount}
+            </span>
+          )}
+        </div>
       );
     }
     default:
@@ -451,6 +470,7 @@ export default function AdminDashboard() {
                           <Cell
                             col={c}
                             value={rec[c.key]}
+                            row={rec}
                             onChangeReview={(v) => onReviewSelect(rec.employee_id, v)}
                           />
                         </td>
