@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -241,6 +242,12 @@ def _flatten_for_summary(bundle: dict, pdf_url: str, employee_id: str, storage_f
         "vat_number": biz.get("vat_number"),
         # --- insurance
         "insurance_option": emp.get("insurance_option"),
+        # --- invoice service
+        "invoice_service_requested": bool(emp.get("invoice_service_requested")),
+        "invoice_service_charge": emp.get("invoice_service_charge"),
+        "invoice_emails": emp.get("invoice_emails") or [],
+        "invoice_email_1": emp.get("invoice_email_1"),
+        "invoice_email_2": emp.get("invoice_email_2"),
         # --- medical (yes/no answers)
         **{f"medical_{k}": med.get(k) for k in _MEDICAL_KEYS},
         "medical_if_yes_details": med.get("if_yes_details"),
@@ -466,6 +473,9 @@ class SubmitInductionIn(BaseModel):
     utr: str = Field(..., min_length=1, max_length=32)
     vat_number: str | None = Field(default=None, max_length=32)
     insurance_option: str = Field(..., min_length=1, max_length=20)
+    invoice_service_requested: bool = Field(default=False)
+    invoice_email_1: str | None = Field(default=None, max_length=200)
+    invoice_email_2: str | None = Field(default=None, max_length=200)
     # Section 3 — signature (image already uploaded to Storage via `files.signature`)
     digital_signature_name: str = Field(..., min_length=1, max_length=200)
     # Section 2 — medical + HAVS answers (all yes/no)
@@ -535,6 +545,49 @@ async def submit_induction(payload: SubmitInductionIn) -> SubmitInductionOut:
         project_id, payload.access_code_id, payload.access_code, payload.email,
     )
 
+    # ---- Invoice-service validation (server-side authoritative) ----
+    invoice_email_re = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+    invoice_emails_list: list[str] = []
+    if payload.invoice_service_requested:
+        raw_emails: list[str] = []
+        if payload.invoice_email_1:
+            raw_emails.append(payload.invoice_email_1)
+        if payload.invoice_email_2:
+            raw_emails.append(payload.invoice_email_2)
+        # Trim, lowercase, dedupe (case-insensitive)
+        seen: set[str] = set()
+        invalid: list[str] = []
+        for raw in raw_emails:
+            e = (raw or "").strip().lower()
+            if not e:
+                continue
+            if not invoice_email_re.fullmatch(e):
+                invalid.append(raw)
+                continue
+            if e in seen:
+                continue
+            seen.add(e)
+            invoice_emails_list.append(e)
+        if invalid:
+            logger.warning(
+                "submit.invoice_invalid_email project=%s email=%s invalid=%s",
+                project_id, payload.email, invalid,
+            )
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid invoice email address(es): {', '.join(invalid)}",
+            )
+        if len(invoice_emails_list) == 0:
+            raise HTTPException(
+                status_code=422,
+                detail="At least one invoice email is required when the invoicing service is selected.",
+            )
+        if len(invoice_emails_list) > 2:
+            raise HTTPException(
+                status_code=422,
+                detail="Maximum 2 invoice email addresses allowed.",
+            )
+
     # 1. employees -------------------------------------------------------------
     employee_payload: dict[str, Any] = {
         "full_name": payload.full_name,
@@ -560,6 +613,11 @@ async def submit_induction(payload: SubmitInductionIn) -> SubmitInductionOut:
             "vat_number": payload.vat_number or None,
         },
         "insurance_option": payload.insurance_option,
+        "invoice_service_requested": payload.invoice_service_requested,
+        "invoice_service_charge": 2 if payload.invoice_service_requested else None,
+        "invoice_emails": invoice_emails_list,
+        "invoice_email_1": invoice_emails_list[0] if len(invoice_emails_list) >= 1 else None,
+        "invoice_email_2": invoice_emails_list[1] if len(invoice_emails_list) >= 2 else None,
         "digital_signature_name": payload.digital_signature_name,
         "access_code": payload.access_code,
         "access_code_id": payload.access_code_id,

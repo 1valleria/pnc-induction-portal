@@ -72,6 +72,35 @@ const StatusPill = ({ value, tone }) => (
 );
 
 function Cell({ col, value, row, onChangeReview }) {
+  if (col.kind === "invoice_service") {
+    const requested = Boolean(value);
+    const emails = (row && Array.isArray(row.invoice_emails)) ? row.invoice_emails : [];
+    if (!requested) {
+      return (
+        <span
+          data-testid="invoice-service-cell-no"
+          className="inline-flex items-center gap-1 text-[#57534E] text-[11px] font-medium"
+        >
+          <XCircle className="h-3 w-3" /> No
+        </span>
+      );
+    }
+    return (
+      <div className="flex flex-col gap-1" data-testid="invoice-service-cell-yes">
+        <span className="inline-flex items-center gap-1 text-[#166534] text-[11px] font-medium whitespace-nowrap">
+          <CheckCircle2 className="h-3 w-3" /> Yes · £2/wk
+        </span>
+        {emails.length > 0 && (
+          <span
+            className="text-[10px] text-[#57534E] leading-tight max-w-[180px] break-words"
+            title={emails.join(", ")}
+          >
+            {emails.join(", ")}
+          </span>
+        )}
+      </div>
+    );
+  }
   if (col.kind === "compliance") {
     const hsOk = Boolean(row && row.health_safety_acknowledged);
     const srOk = Boolean(row && row.site_rules_acknowledged);

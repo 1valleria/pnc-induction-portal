@@ -163,6 +163,25 @@ export default function Wizard() {
       if (!files.bank_proof) e.bank_proof = "Required";
       if (data.insurance_option === "own" && !files.insurance_certificate)
         e.insurance_certificate = "Required";
+      // Invoice service question
+      if (data.invoice_service_requested === undefined || data.invoice_service_requested === null) {
+        e.invoice_service_requested = "Please choose Yes or No";
+      } else if (data.invoice_service_requested === true) {
+        const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const e1 = (data.invoice_email_1 || "").trim().toLowerCase();
+        const e2 = (data.invoice_email_2 || "").trim().toLowerCase();
+        if (!e1) {
+          e.invoice_email_1 = "At least one invoice email is required";
+        } else if (!emailRe.test(e1)) {
+          e.invoice_email_1 = "Enter a valid email";
+        }
+        if (e2 && !emailRe.test(e2)) {
+          e.invoice_email_2 = "Enter a valid email";
+        }
+        if (e1 && e2 && e1 === e2) {
+          e.invoice_email_2 = "This email is the same as Email 1";
+        }
+      }
     }
     if (s === 1) {
       const missingMed = MEDICAL_QUESTIONS.find((q) => !medical[q.key]);
@@ -291,6 +310,13 @@ export default function Wizard() {
           utr: data.utr,
           vat_number: data.vat_number || null,
           insurance_option: data.insurance_option,
+          invoice_service_requested: Boolean(data.invoice_service_requested),
+          invoice_email_1: data.invoice_service_requested
+            ? (data.invoice_email_1 || "").trim().toLowerCase() || null
+            : null,
+          invoice_email_2: data.invoice_service_requested
+            ? (data.invoice_email_2 || "").trim().toLowerCase() || null
+            : null,
           digital_signature_name: data.digital_signature_name,
           medical: {
             ...MEDICAL_QUESTIONS.reduce((acc, q) => ({ ...acc, [q.key]: medical[q.key] }), {}),

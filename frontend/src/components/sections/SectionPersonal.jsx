@@ -291,6 +291,79 @@ export const SectionPersonal = ({ data, update, files, setFile, errors = {} }) =
           />
         )}
       </section>
+
+      {/* Invoice service */}
+      <section className="space-y-5">
+        <header>
+          <div className="text-[11px] uppercase tracking-[0.18em] font-semibold text-[#166534]">
+            Weekly Invoicing Service
+          </div>
+          <h2 className="font-heading text-lg sm:text-xl text-[#1C1917] tracking-tight">
+            Would you like PNC to create your weekly invoices for a £2 weekly charge?
+          </h2>
+        </header>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div
+            className={radioCard(data.invoice_service_requested === true)}
+            onClick={() => update({ invoice_service_requested: true })}
+            data-testid="invoice-yes"
+          >
+            <div className="text-sm font-semibold text-[#1C1917]">Yes — £2/week</div>
+            <div className="text-xs text-[#57534E] mt-1">
+              PNC will prepare and send my weekly invoices.
+            </div>
+          </div>
+          <div
+            className={radioCard(data.invoice_service_requested === false)}
+            onClick={() =>
+              update({
+                invoice_service_requested: false,
+                invoice_email_1: "",
+                invoice_email_2: "",
+              })
+            }
+            data-testid="invoice-no"
+          >
+            <div className="text-sm font-semibold text-[#1C1917]">No</div>
+            <div className="text-xs text-[#57534E] mt-1">
+              I will produce my own invoices.
+            </div>
+          </div>
+        </div>
+        {errors.invoice_service_requested && (
+          <p className="text-xs text-[#EF4444]">{errors.invoice_service_requested}</p>
+        )}
+
+        {data.invoice_service_requested === true && (
+          <div className="space-y-4 rounded-xl border border-[#E7E5E4] bg-[#FAFAF9] p-4 sm:p-5">
+            <div className="text-sm font-medium text-[#1C1917]">
+              What email address(es) should we send the weekly invoices to?
+            </div>
+            <Field label="Invoice Email 1" required error={errors.invoice_email_1}>
+              <TextInput
+                data-testid="invoice-email-1"
+                type="email"
+                placeholder="invoices@example.com"
+                value={data.invoice_email_1 || ""}
+                onChange={(e) => update({ invoice_email_1: e.target.value })}
+              />
+            </Field>
+            <Field label="Invoice Email 2 (optional)" error={errors.invoice_email_2}>
+              <TextInput
+                data-testid="invoice-email-2"
+                type="email"
+                placeholder="accounts@example.com"
+                value={data.invoice_email_2 || ""}
+                onChange={(e) => update({ invoice_email_2: e.target.value })}
+              />
+            </Field>
+            <p className="text-xs text-[#57534E]">
+              Up to 2 email addresses. We&apos;ll send your weekly invoice to all of them.
+            </p>
+          </div>
+        )}
+      </section>
     </div>
   );
 };

@@ -377,6 +377,23 @@ def build_induction_pdf(
     )
     story.append(_kv_table([("Insurance Choice", ins_label)], styles))
 
+    # ---- Invoicing Service ----
+    invoice_requested = bool(employee.get("invoice_service_requested"))
+    invoice_emails = employee.get("invoice_emails") or []
+    if not invoice_emails:
+        if employee.get("invoice_email_1"):
+            invoice_emails.append(employee.get("invoice_email_1"))
+        if employee.get("invoice_email_2"):
+            invoice_emails.append(employee.get("invoice_email_2"))
+    invoice_rows: list[tuple[str, str | None]] = [
+        ("Weekly invoice service", "Yes" if invoice_requested else "No"),
+    ]
+    if invoice_requested:
+        invoice_rows.append(("Weekly charge", "£2"))
+        invoice_rows.append(("Invoice email(s)", ", ".join(invoice_emails) if invoice_emails else "—"))
+    story.append(Spacer(1, 4))
+    story.append(_kv_table(invoice_rows, styles))
+
     # ---- Medical ----
     story.append(Paragraph("Medical History", styles["section"]))
     med_items = [(k, lbl, medical.get(k)) for k, lbl in MEDICAL_QUESTIONS]
