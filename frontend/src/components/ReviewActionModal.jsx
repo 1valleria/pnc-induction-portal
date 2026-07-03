@@ -11,7 +11,7 @@ import { Field, TextArea, TextInput } from "@/components/Field";
  * return the backend response (or undefined on failure). For rejections we
  * stay open after success to surface the freshly minted access code.
  */
-export default function ReviewActionModal({ open, mode, employeeName, employeeEmail, onConfirm, onClose }) {
+export default function ReviewActionModal({ open, mode, employeeName, employeeEmail, defaultManagerEmails, onConfirm, onClose }) {
   const [note, setNote] = useState("");
   const [managerEmail, setManagerEmail] = useState("");
   const [managerError, setManagerError] = useState(null);
@@ -22,13 +22,20 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
   useEffect(() => {
     if (open) {
       setNote("");
-      setManagerEmail("");
+      // Pre-fill with the deployment-configured default manager address(es)
+      // so HR never forgets to notify the admin inbox. HR can edit/clear
+      // freely before submitting.
+      setManagerEmail(
+        Array.isArray(defaultManagerEmails) && defaultManagerEmails.length > 0
+          ? defaultManagerEmails.join(", ")
+          : ""
+      );
       setManagerError(null);
       setSending(false);
       setResubmitResult(null);
       setCopiedField(null);
     }
-  }, [open, mode]);
+  }, [open, mode, defaultManagerEmails]);
 
   if (!open) return null;
 
@@ -219,7 +226,7 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
               </Field>
               <div className="rounded-lg bg-[#FEF2F2] border border-[#FECACA] text-[#B91C1C] text-xs p-3 flex items-start gap-2">
                 <AlertTriangle className="h-3.5 w-3.5 mt-0.5" />
-                On submit we'll mark the record <b>Rejected</b>, generate a new access code and send the email immediately.
+                On submit we&apos;ll mark the record <b>Rejected</b>, generate a new access code and send the email immediately.
               </div>
             </>
           ) : (

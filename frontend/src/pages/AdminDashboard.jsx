@@ -228,12 +228,33 @@ export default function AdminDashboard() {
   const [reviewFilter, setReviewFilter] = useState("");
   const [showInvite, setShowInvite] = useState(false);
   const [reviewModal, setReviewModal] = useState(null); // { employee_id, mode, name, email }
+  const [defaultManagerEmails, setDefaultManagerEmails] = useState([]);
 
   useEffect(() => {
     if (!hasCreds()) {
       navigate("/admin", { replace: true });
     }
   }, [navigate]);
+
+  // One-shot fetch of runtime config so the review modal can pre-fill
+  // the "Manager Email(s)" field with DEFAULT_MANAGER_EMAILS from the
+  // deployment env.
+  useEffect(() => {
+    if (!hasCreds()) return;
+    (async () => {
+      try {
+        const res = await adminFetch("/api/admin/system-status");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.default_manager_emails)) {
+            setDefaultManagerEmails(data.default_manager_emails);
+          }
+        }
+      } catch {
+        // non-fatal: modal simply opens with an empty manager field
+      }
+    })();
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -567,6 +588,7 @@ export default function AdminDashboard() {
         mode={reviewModal?.mode}
         employeeName={reviewModal?.name}
         employeeEmail={reviewModal?.email}
+        defaultManagerEmails={defaultManagerEmails}
         onClose={() => setReviewModal(null)}
         onConfirm={async ({ review_status, review_note, manager_email, manager_count }) => {
           return await submitReview({

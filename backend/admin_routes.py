@@ -299,12 +299,22 @@ def system_status() -> dict[str, Any]:
     override = os.environ.get("RESEND_TEST_OVERRIDE_EMAIL")
     sender = os.environ.get("SENDER_EMAIL") or "onboarding@resend.dev"
     portal = os.environ.get("PUBLIC_PORTAL_URL") or ""
+    # Default manager emails — auto-populated in the review modal. Comma or
+    # semicolon separated in the env var, parsed the same way as user input.
+    try:
+        default_manager_emails = _parse_manager_emails(
+            os.environ.get("DEFAULT_MANAGER_EMAILS"), None
+        )
+    except HTTPException:
+        # Malformed env value should not crash the endpoint — surface empty list
+        default_manager_emails = []
     return {
         "email_test_mode": bool(override),
         "email_redirect_to": override or None,
         "sender_email": sender,
         "portal_url": portal,
         "resend_configured": bool(os.environ.get("RESEND_API_KEY")),
+        "default_manager_emails": default_manager_emails,
     }
 
 
