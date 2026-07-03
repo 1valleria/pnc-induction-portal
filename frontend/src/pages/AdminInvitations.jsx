@@ -197,10 +197,6 @@ export default function AdminInvitations() {
             </table>
           </div>
         </div>
-
-        <p className="text-xs text-[#57534E] mt-3">
-          During Resend test mode every email is delivered only to the Resend account owner. The inductee's real address will start receiving mail once the PNC domain is verified.
-        </p>
       </div>
 
       <InviteModal
