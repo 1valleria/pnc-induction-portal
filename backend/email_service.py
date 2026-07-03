@@ -99,6 +99,10 @@ async def send_email(
         record["status"] = "sent"
         record["message_id"] = (email or {}).get("id")
         _log_email(db, record)
+        logger.info(
+            "email.sent purpose=%s to=%s message_id=%s redirected=%s",
+            purpose, actual_to, record["message_id"], original_to is not None,
+        )
         return {
             "status": "sent",
             "message_id": record["message_id"],
@@ -106,10 +110,38 @@ async def send_email(
             "actual_recipient": actual_to,
         }
     except Exception as exc:  # noqa: BLE001
-        # Do not include any header that might echo the key.
-        msg = type(exc).__name__
+        # Extract as much diagnostic detail as safely possible from the Resend
+        # exception without leaking the API key. The resend-python SDK raises
+        # exceptions whose `.args`, `.message`, `.code`, or `.status_code`
+        # carry the useful info; we capture all of them defensively.
+        cls = type(exc).__name__
+        detail: dict[str, Any] = {"error_class": cls}
+        for attr in ("status_code", "code", "message", "error_type", "name"):
+            val = getattr(exc, attr, None)
+            if val is not None:
+                detail[attr] = str(val)[:400]
+        # str(exc) usually contains a JSON blob from Resend; keep it capped.
+        if str(exc):
+            detail["message_body"] = str(exc)[:400]
+        # Sanitise anything that might contain the API key just in case.
+        api_key = os.environ.get("RESEND_API_KEY") or ""
+        if api_key:
+            for k, v in list(detail.items()):
+                if isinstance(v, str) and api_key in v:
+                    detail[k] = v.replace(api_key, "<REDACTED_API_KEY>")
+
         record["status"] = "failed"
-        record["error"] = msg
+        record["error"] = detail
         _log_email(db, record)
-        logger.error("Resend send failed: %s", msg)
-        raise EmailSendError(msg)
+        # Structured log line — searchable in Cloud Run / Emergent logs.
+        logger.error(
+            "email.send_failed purpose=%s to=%s error_class=%s status_code=%s message=%s",
+            purpose, actual_to, cls, detail.get("status_code"), detail.get("message_body"),
+        )
+        # Human-readable string for the API response / EmailSendError message
+        summary_parts: list[str] = [cls]
+        if detail.get("status_code"):
+            summary_parts.append(f"HTTP {detail['status_code']}")
+        if detail.get("message_body"):
+            summary_parts.append(detail["message_body"])
+        raise EmailSendError(" — ".join(summary_parts))

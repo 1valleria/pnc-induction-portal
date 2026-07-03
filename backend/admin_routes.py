@@ -653,3 +653,36 @@ def list_invites(limit: int = Query(default=500, ge=1, le=2000)) -> dict[str, An
     # newest invited_at first; fall back to created
     items.sort(key=lambda r: (r.get("invited_at") or ""), reverse=True)
     return {"count": len(items), "items": items[:limit]}
+
+
+
+@admin_router.get("/email-logs", dependencies=[Depends(require_admin)])
+def list_email_logs(limit: int = Query(default=50, ge=1, le=500)) -> dict[str, Any]:
+    """Return the most recent email_logs entries so HR / admins can inspect
+    Resend delivery failures without needing Cloud Run log access. Useful for
+    triaging 'Email failed to send' errors on production.
+    """
+    db = _get_db()
+    items: list[dict[str, Any]] = []
+    for doc in db.collection("email_logs").stream():
+        d = doc.to_dict() or {}
+        created = d.get("created_at")
+        if hasattr(created, "isoformat"):
+            created = created.isoformat()
+        items.append(
+            {
+                "id": doc.id,
+                "created_at": created,
+                "purpose": d.get("purpose"),
+                "to": d.get("to"),
+                "actual_recipient": d.get("actual_recipient"),
+                "redirected_from": d.get("redirected_from"),
+                "subject": d.get("subject"),
+                "status": d.get("status"),
+                "message_id": d.get("message_id"),
+                "error": d.get("error"),
+                "employee_id": d.get("employee_id"),
+            }
+        )
+    items.sort(key=lambda r: (r.get("created_at") or ""), reverse=True)
+    return {"count": len(items), "items": items[:limit]}
