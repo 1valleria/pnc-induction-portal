@@ -343,8 +343,8 @@ export default function Wizard() {
         try {
           const body = await resp.json();
           if (body && body.detail) detail = body.detail;
-        } catch {
-          // body wasn't JSON — keep the HTTP status detail
+        } catch (bodyParseErr) {
+          console.debug("[Wizard] response body not JSON", bodyParseErr);
         }
         throw new Error(detail);
       }

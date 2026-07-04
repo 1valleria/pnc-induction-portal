@@ -100,8 +100,8 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
       await navigator.clipboard.writeText(text);
       setCopiedField(field);
       setTimeout(() => setCopiedField(null), 1600);
-    } catch {
-      /* ignore */
+    } catch (clipboardErr) {
+      console.debug("[ReviewActionModal] clipboard write failed", clipboardErr);
     }
   };
 

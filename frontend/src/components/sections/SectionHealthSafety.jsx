@@ -56,7 +56,7 @@ const AccordionCard = ({ section, index, acknowledgedAt, onAcknowledge }) => {
         <div className="px-4 sm:px-5 pb-4 border-t border-[#F5F5F4]">
           <div className="text-sm text-[#1C1917] leading-relaxed space-y-3 pt-3 max-h-72 overflow-y-auto pr-1">
             {section.body.map((para, i) => (
-              <p key={i} className={para.startsWith("•") ? "pl-1" : ""}>{para}</p>
+              <p key={`${section.key}-para-${i}`} className={para.startsWith("•") ? "pl-1" : ""}>{para}</p>
             ))}
           </div>
           <div className="mt-4 flex items-center justify-between gap-3 pt-3 border-t border-[#F5F5F4]">

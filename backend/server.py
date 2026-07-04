@@ -545,6 +545,12 @@ async def submit_induction(payload: SubmitInductionIn) -> SubmitInductionOut:
         project_id, payload.access_code_id, payload.access_code, payload.email,
     )
 
+    # Defensive initialisation — every real code path sets this in the
+    # employees.add() try-block below, but declaring it here appeases static
+    # analysers and guarantees the SubmitInductionOut construction at the
+    # bottom of the function never trips on an unbound name.
+    employee_id: str = ""
+
     # ---- Invoice-service validation (server-side authoritative) ----
     invoice_email_re = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
     invoice_emails_list: list[str] = []

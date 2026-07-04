@@ -36,7 +36,7 @@ export const SectionSiteRules = ({ siteRulesAck, onAcknowledge, errors }) => {
       <div className="rounded-2xl border border-[#E7E5E4] bg-white shadow-sm p-4 sm:p-6">
         <ul className="space-y-3" data-testid="site-rules-list">
           {SITE_RULES.map((rule, i) => (
-            <li key={i} className="flex gap-3 text-sm text-[#1C1917] leading-relaxed">
+            <li key={`site-rule-${i}-${rule.slice(0, 20)}`} className="flex gap-3 text-sm text-[#1C1917] leading-relaxed">
               <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#FAFAF9] border border-[#E7E5E4] text-[11px] font-semibold text-[#57534E] flex-shrink-0">
                 {i + 1}
               </span>

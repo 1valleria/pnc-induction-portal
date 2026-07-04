@@ -250,8 +250,8 @@ export default function AdminDashboard() {
             setDefaultManagerEmails(data.default_manager_emails);
           }
         }
-      } catch {
-        // non-fatal: modal simply opens with an empty manager field
+      } catch (statusErr) {
+        console.debug("[AdminDashboard] system-status fetch failed", statusErr);
       }
     })();
   }, []);
