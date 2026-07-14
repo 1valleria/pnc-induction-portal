@@ -7,6 +7,10 @@ import Success from "@/pages/Success";
 import AdminLogin from "@/pages/AdminLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminInvitations from "@/pages/AdminInvitations";
+import About from "@/pages/About";
+import Contact from "@/pages/Contact";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
+import Terms from "@/pages/Terms";
 import "@/App.css";
 
 function App() {
@@ -24,6 +28,10 @@ function App() {
           <Route path="/" element={<AccessGate />} />
           <Route path="/induction" element={<Wizard />} />
           <Route path="/success" element={<Success />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/legal/privacy" element={<PrivacyPolicy />} />
+          <Route path="/legal/terms" element={<Terms />} />
           <Route path="/admin" element={<AdminLogin />} />
           <Route path="/admin/employees" element={<AdminDashboard />} />
           <Route path="/admin/invitations" element={<AdminInvitations />} />

@@ -1,0 +1,12 @@
+# PNC UNIQUE LTD Contractor Induction Portal — security.txt
+# Compliant with RFC 9116.
+#
+# Please report suspected security issues to the address below. Do not
+# include exploitation details in the first email; we will co-ordinate a
+# secure channel for follow-up.
+
+Contact: mailto:security-placeholder@example.com
+Preferred-Languages: en
+Canonical: https://trust-audit-staging.preview.emergentagent.com/.well-known/security.txt
+Policy: https://trust-audit-staging.preview.emergentagent.com/legal/terms
+Expires: 2027-01-01T00:00:00Z

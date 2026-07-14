@@ -1,0 +1,18 @@
+# PNC UNIQUE LTD Contractor Induction Portal
+#
+# The Portal is only useful to authenticated inductees and HR staff.
+# We do not want administrative surfaces indexed — they are exposed here so
+# reputation crawlers see an explicit robots.txt (a positive trust signal)
+# while blocking the private routes.
+
+User-agent: *
+Allow: /
+Allow: /about
+Allow: /contact
+Allow: /legal/privacy
+Allow: /legal/terms
+Disallow: /induction
+Disallow: /success
+Disallow: /admin
+Disallow: /admin/
+Disallow: /api/

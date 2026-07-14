@@ -1,20 +1,30 @@
 rules_version = '2';
 
-// PNC Induction Portal — Cloud Storage security rules
+// PNC UNIQUE LTD — Contractor Induction Portal
+// Cloud Storage Security Rules
 //
-// Inductees upload identity documents and signatures directly from the
-// browser via the Firebase Web SDK. Reads are open so the confirmation
-// screen can show thumbnails.
+// Model:
+//   * Inductees upload identity documents and signatures directly from the
+//     browser via the Firebase Web SDK (chunked upload). We keep this for
+//     usability (large PDFs / photos would be too slow to proxy).
+//   * Reads from clients are DENIED. Signed download URLs are minted
+//     server-side by the FastAPI backend using the Admin SDK and stored on
+//     the employee_summary / employee_documents Firestore doc — the admin
+//     dashboard uses those URLs directly, which include a Firebase-issued
+//     download token that authorises the request without needing an open
+//     read rule.
+//   * Every write is capped at 10 MB and restricted to allowed MIME types.
+//
+// All other paths are deny-by-default.
 
 service firebase.storage {
   match /b/{bucket}/o {
     match /employees/{employeeId}/{allPaths=**} {
       allow write: if request.resource.size < 10 * 1024 * 1024
                    && request.resource.contentType.matches('image/(jpeg|jpg|png|webp)|application/pdf');
-      allow read: if true;
+      allow read: if false;
     }
 
-    // Deny everything else.
     match /{allPaths=**} {
       allow read, write: if false;
     }

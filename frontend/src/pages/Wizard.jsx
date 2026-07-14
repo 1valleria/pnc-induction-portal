@@ -257,7 +257,6 @@ export default function Wizard() {
       // The Storage folder path needs an id; we use the access_code_id so it's
       // unique per inductee even before the backend assigns an employee_id.
       // The backend will resolve / persist this same path on employee_documents.
-      console.info("[Wizard] uploading files to Storage");
       const storageFolderPath = buildStorageFolderPath(data.full_name, session.accessCodeId);
       const uploads = {};
       if (files.passport)
@@ -277,14 +276,12 @@ export default function Wizard() {
         `signature_${session.accessCodeId}.png`
       );
       uploads.signature = signatureRes;
-      console.info("[Wizard] uploads complete", Object.keys(uploads));
 
       // 3. Submit everything via the consolidated backend endpoint.
       // Backend writes employees / medical_history / havs_questionnaires /
       // employee_documents / employee_summary, marks the access code used,
       // and generates the PDF — all via the Firebase Admin SDK.
       const submitUrl = `${apiBase}/api/induction/submit`;
-      console.info("[Wizard] POST", submitUrl);
       const resp = await fetch(submitUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -350,16 +347,14 @@ export default function Wizard() {
       }
 
       const body = await resp.json();
-      console.info("[Wizard] submit success", body);
 
       clearProgress();
       sessionStorage.removeItem("pnc_session_v1");
       navigate(`/success?id=${body.employee_id}`, { replace: true });
     } catch (err) {
-      console.error("[Wizard] submit failed", err);
       const msg = err && err.message ? err.message : "Unknown error";
       setSubmitError(
-        `Something went wrong submitting your induction: ${msg}. Your progress is still saved — please try again, or contact PNC Admin if the problem continues.`
+        `Something went wrong submitting your induction: ${msg}. Your progress is still saved — please try again, or contact PNC UNIQUE LTD HR if the problem continues.`
       );
       setSubmitting(false);
     }

@@ -52,10 +52,10 @@ export default function AdminLogin() {
             <ShieldCheck className="h-6 w-6" strokeWidth={2} />
           </div>
           <h1 className="font-heading text-3xl sm:text-4xl tracking-tight text-[#1C1917]">
-            PNC HR Admin
+            PNC UNIQUE LTD HR
           </h1>
           <p className="text-sm text-[#57534E] mt-2">
-            Subcontractor database & induction records
+            Subcontractor database &amp; induction records
           </p>
         </div>
         <form

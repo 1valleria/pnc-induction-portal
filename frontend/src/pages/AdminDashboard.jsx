@@ -419,7 +419,7 @@ export default function AdminDashboard() {
           </div>
           <div>
             <div className="font-heading text-lg text-[#1C1917] leading-tight">
-              PNC HR Admin
+              PNC UNIQUE LTD HR
             </div>
             <div className="text-[11px] text-[#57534E] -mt-0.5">
               Subcontractor database

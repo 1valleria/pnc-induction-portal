@@ -79,7 +79,7 @@ export default function AdminInvitations() {
             <ShieldCheck className="h-4.5 w-4.5" />
           </div>
           <div>
-            <div className="font-heading text-lg text-[#1C1917] leading-tight">PNC HR Admin</div>
+            <div className="font-heading text-lg text-[#1C1917] leading-tight">PNC UNIQUE LTD HR</div>
             <div className="text-[11px] text-[#57534E] -mt-0.5">Invitations</div>
           </div>
           <nav className="ml-6 hidden sm:flex items-center gap-1 text-sm">

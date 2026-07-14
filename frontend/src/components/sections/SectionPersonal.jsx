@@ -14,6 +14,17 @@ const radioCard = (active) =>
 export const SectionPersonal = ({ data, update, files, setFile, errors = {} }) => {
   return (
     <div className="space-y-10">
+      <div className="rounded-xl border border-[#E7E5E4] bg-[#F0FDF4] p-4 text-[13px] text-[#1C1917] leading-relaxed">
+        <div className="text-[11px] uppercase tracking-[0.18em] font-semibold text-[#166534] mb-1">
+          Why we ask for this information
+        </div>
+        PNC UNIQUE LTD collects the following details to confirm your right to work,
+        register you as a subcontractor, and pay you correctly. The data is stored
+        securely in the UK, is not shared with third parties for marketing, and is
+        retained only for as long as required by HMRC and CDM 2015 rules. See our
+        <a href="/legal/privacy" className="underline hover:text-[#166534] ml-1">Privacy Notice</a>
+        &nbsp;for full details.
+      </div>
       {/* Personal */}
       <section className="space-y-5">
         <header>
@@ -142,6 +153,17 @@ export const SectionPersonal = ({ data, update, files, setFile, errors = {} }) =
             Verification documents
           </h2>
         </header>
+
+        <div className="rounded-xl border border-[#E7E5E4] bg-[#F0FDF4] p-4 text-[13px] text-[#1C1917] leading-relaxed">
+          <div className="text-[11px] uppercase tracking-[0.18em] font-semibold text-[#166534] mb-1">
+            About the documents you are about to upload
+          </div>
+          These documents are used solely to confirm your identity and your right
+          to work under UK law. Files are encrypted in transit, stored in a
+          secure UK region on Google Cloud, and are only viewable by authorised
+          PNC UNIQUE LTD HR staff. Accepted formats: JPG, PNG or PDF, up to
+          10&nbsp;MB per file.
+        </div>
 
         <Field label="Right To Work Share Code" required error={errors.right_to_work_share_code}>
           <TextInput

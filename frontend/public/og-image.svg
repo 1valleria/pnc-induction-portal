@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="PNC UNIQUE LTD Contractor Induction Portal">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#F5F5F4"/>
+      <stop offset="1" stop-color="#ECFDF5"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#166534"/>
+      <stop offset="1" stop-color="#14532D"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <g transform="translate(96,180)">
+    <rect width="140" height="140" rx="32" fill="url(#brand)"/>
+    <text x="70" y="90" text-anchor="middle" fill="#F0FDF4" font-family="Inter, system-ui, sans-serif" font-weight="800" font-size="40">PNC</text>
+  </g>
+  <g transform="translate(280,205)">
+    <text font-family="Inter, system-ui, sans-serif" font-weight="800" fill="#1C1917" font-size="64">PNC UNIQUE LTD</text>
+    <text y="56" font-family="Inter, system-ui, sans-serif" font-weight="600" fill="#166534" font-size="22" letter-spacing="4">CONTRACTOR INDUCTION PORTAL</text>
+    <text y="120" font-family="Inter, system-ui, sans-serif" font-weight="400" fill="#57534E" font-size="26">Secure digital on-boarding for approved subcontractors.</text>
+  </g>
+</svg>

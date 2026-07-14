@@ -1,59 +1,23 @@
 rules_version = '2';
 
-// PNC Induction Portal — Firestore security rules
+// PNC UNIQUE LTD — Contractor Induction Portal
+// Firestore Security Rules
 //
-// Public-by-design endpoints (no auth on the frontend):
-//   * access_codes  — read open so the login page can validate by code.
-//   * employees / medical_history / havs_questionnaires / employee_documents
-//                    — create open so an inductee can submit their data.
+// Model:
+//   * The FastAPI backend uses the Firebase Admin SDK, which bypasses these
+//     rules entirely. All reads/writes on production data go through the
+//     backend, where they are authenticated (invitee access-code check for
+//     the induction endpoints; HTTP Basic Auth for admin endpoints) and
+//     logged in Cloud Run.
+//   * The browser never reads or writes Firestore directly. Storage uploads
+//     from the browser remain (see storage.rules) but the download URLs are
+//     minted server-side.
 //
-// Admin-only (server reads/writes via Firebase Admin SDK, which bypasses rules):
-//   * employee_summary, email_logs
-//
-// All other collections are deny-by-default.
+// Therefore this ruleset is deny-by-default for every collection.
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    match /access_codes/{docId} {
-      allow read: if true;
-      // Allow marking a code as used (and only those three fields) so the
-      // inductee can finalise without admin help.
-      allow update: if request.resource.data.diff(resource.data).changedKeys()
-                       .hasOnly(['used', 'used_at', 'employee_id']);
-      allow create, delete: if false;
-    }
-
-    match /employees/{id} {
-      allow create: if true;
-      allow read, update, delete: if false;
-    }
-
-    match /medical_history/{id} {
-      allow create: if true;
-      allow read, update, delete: if false;
-    }
-
-    match /havs_questionnaires/{id} {
-      allow create: if true;
-      allow read, update, delete: if false;
-    }
-
-    match /employee_documents/{id} {
-      allow create: if true;
-      allow read, update, delete: if false;
-    }
-
-    // Admin-only: backend uses the Admin SDK which bypasses rules.
-    match /employee_summary/{id} {
-      allow read, write: if false;
-    }
-
-    match /email_logs/{id} {
-      allow read, write: if false;
-    }
-
-    // Deny anything else.
+    // Deny every direct client access. Backend Admin SDK bypasses rules.
     match /{document=**} {
       allow read, write: if false;
     }

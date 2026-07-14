@@ -346,7 +346,7 @@ async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str,
     # Rejection-only: mint a fresh access code so the inductee can resubmit.
     new_access_code: str | None = None
     new_access_code_id: str | None = None
-    portal_url = os.environ.get("PUBLIC_PORTAL_URL") or "https://pnc-induction.co.uk"
+    portal_url = os.environ.get("PUBLIC_PORTAL_URL") or ""
     is_rejection = payload.review_status == "rejected" and previous != "rejected"
     if is_rejection:
         new_access_code = _new_unique_code(db)
@@ -531,7 +531,7 @@ async def create_invite(payload: InviteIn) -> dict[str, Any]:
     project_id = getattr(db, "project", None) or os.environ.get("GOOGLE_CLOUD_PROJECT") or "<unknown>"
     code = _new_unique_code(db)
     now = datetime.now(timezone.utc).isoformat()
-    portal_url = os.environ.get("PUBLIC_PORTAL_URL") or "https://pnc-induction.co.uk"
+    portal_url = os.environ.get("PUBLIC_PORTAL_URL") or ""
     normalised_email = (payload.email or "").strip().lower() or None
 
     doc_payload = {

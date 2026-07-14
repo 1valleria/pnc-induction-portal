@@ -33,7 +33,17 @@ logging.basicConfig(
 logger = logging.getLogger("pnc")
 
 
-app = FastAPI(title="PNC Induction Portal API")
+# Disable interactive docs + OpenAPI JSON in production so the surface is not
+# exposed to reputation scanners / recon tooling. Set APP_ENV=development in
+# local .env to re-enable them for debugging.
+_APP_ENV = (os.environ.get("APP_ENV") or "production").lower()
+_ENABLE_DOCS = _APP_ENV != "production"
+app = FastAPI(
+    title="Contractor Induction API",
+    docs_url="/docs" if _ENABLE_DOCS else None,
+    redoc_url="/redoc" if _ENABLE_DOCS else None,
+    openapi_url="/openapi.json" if _ENABLE_DOCS else None,
+)
 api_router = APIRouter(prefix="/api")
 
 
@@ -443,7 +453,7 @@ async def mark_access_code_used(payload: MarkCodeUsedIn) -> dict[str, Any]:
 
 class FileUploadIn(BaseModel):
     path: str
-    url: str
+    url: str | None = None
     name: str | None = None
     size: int | None = None
     type: str | None = None
@@ -687,7 +697,29 @@ async def submit_induction(payload: SubmitInductionIn) -> SubmitInductionOut:
         raise HTTPException(status_code=502, detail=f"Failed to create HAVS record: {exc}")
 
     # 4. employee_documents ----------------------------------------------------
-    files_meta = {slot: f.model_dump() for slot, f in payload.files.items()}
+    # For each uploaded file we ensure a download-token URL exists. The
+    # frontend now uploads bytes to Storage but does not call getDownloadURL
+    # (which requires a permissive read rule) \u2014 the Admin SDK mints the token
+    # here instead. If the frontend supplied a URL (legacy path), we keep it.
+    files_meta: dict[str, Any] = {}
+    for slot, f in payload.files.items():
+        file_dict = f.model_dump()
+        if not file_dict.get("url") and file_dict.get("path"):
+            try:
+                blob = bucket.blob(file_dict["path"])
+                if blob.exists():
+                    file_dict["url"] = _make_public_url(bucket, blob)
+                else:
+                    logger.warning(
+                        "submit.file_missing_in_storage project=%s slot=%s path=%s",
+                        project_id, slot, file_dict["path"],
+                    )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "submit.file_url_mint_failed project=%s slot=%s path=%s err=%s",
+                    project_id, slot, file_dict.get("path"), exc,
+                )
+        files_meta[slot] = file_dict
     documents_doc: dict[str, Any] = {
         "employee_id": employee_id,
         "storage_folder_path": payload.storage_folder_path,
@@ -916,10 +948,17 @@ app.include_router(api_router)
 from admin_routes import admin_router  # noqa: E402
 app.include_router(admin_router)
 
+# CORS \u2014 strict allow-list from env. Never allow `*` when credentials are on.
+_raw_origins = os.environ.get("CORS_ORIGINS", "").strip()
+_allow_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()] if _raw_origins else []
+if not _allow_origins:
+    # Safety fallback \u2014 refuse cross-origin traffic if no origins are configured.
+    _allow_origins = ["null"]
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_allow_origins,
+    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
+    max_age=600,
 )

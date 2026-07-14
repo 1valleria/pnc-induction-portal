@@ -15,6 +15,15 @@ export const SectionSignature = ({ data, update, errors = {} }) => {
             Please read carefully before signing
           </h2>
         </header>
+        <div className="rounded-xl border border-[#E7E5E4] bg-[#F0FDF4] p-4 mb-4 text-[13px] text-[#1C1917] leading-relaxed">
+          <div className="text-[11px] uppercase tracking-[0.18em] font-semibold text-[#166534] mb-1">
+            Why we ask for a signature
+          </div>
+          Your typed name and drawn signature form your electronic signature under the
+          Electronic Communications Act 2000. They confirm that everything you have
+          entered is true to the best of your knowledge. The signature image is stored
+          securely alongside your induction record and only used by PNC UNIQUE LTD HR.
+        </div>
         <div className="rounded-2xl bg-white border border-[#E7E5E4] p-4 sm:p-5 text-sm text-[#1C1917] leading-relaxed whitespace-pre-wrap">
           {DECLARATION_TEXT}
         </div>
