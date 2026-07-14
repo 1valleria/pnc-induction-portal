@@ -207,7 +207,7 @@ backend:
           comment: "Hard-coded pnc-induction.co.uk fallback removed. If PUBLIC_PORTAL_URL is unset the portal_url in the response is empty string but functionality is unchanged. Approving/rejecting should still update employee_summary. Rejecting should still mint a new access code."
         - working: true
           agent: "testing"
-          comment: "✅ PASSED. (1) PATCH with review_status='approved' updates employee_summary, returns email_status='skipped' (correct with RESEND_API_KEY unset). (2) PATCH with review_status='rejected' mints new access code (PNC-XXXX-XXXX format), returns {new_access_code, new_access_code_id, invitation_text, portal_url}. portal_url matches PUBLIC_PORTAL_URL env var (https://trust-audit-staging.preview.emergentagent.com). No retired brand strings in responses. All transitions working correctly."
+          comment: "✅ PASSED. (1) PATCH with review_status='approved' updates employee_summary, returns email_status='skipped' (correct with RESEND_API_KEY unset). (2) PATCH with review_status='rejected' mints new access code (PNC-XXXX-XXXX format), returns {new_access_code, new_access_code_id, invitation_text, portal_url}. portal_url matches PUBLIC_PORTAL_URL env var (https://pnc-start.preview.emergentagent.com). No retired brand strings in responses. All transitions working correctly."
   - task: "Admin: CSV export (GET /api/admin/employees.csv)"
     implemented: true
     working: true
@@ -235,7 +235,7 @@ backend:
           comment: "Unchanged. Should return {email_test_mode, email_redirect_to, sender_email, portal_url, resend_configured, default_manager_emails}. With RESEND_API_KEY unset, resend_configured must be false."
         - working: true
           agent: "testing"
-          comment: "✅ PASSED. Returns 200 with correct payload: {email_test_mode: false, email_redirect_to: null, sender_email: 'onboarding@resend.dev', portal_url: 'https://trust-audit-staging.preview.emergentagent.com', resend_configured: false, default_manager_emails: []}. resend_configured correctly reports false (RESEND_API_KEY unset). email_test_mode correctly reports false (RESEND_TEST_OVERRIDE_EMAIL unset)."
+          comment: "✅ PASSED. Returns 200 with correct payload: {email_test_mode: false, email_redirect_to: null, sender_email: 'onboarding@resend.dev', portal_url: 'https://pnc-start.preview.emergentagent.com', resend_configured: false, default_manager_emails: []}. resend_configured correctly reports false (RESEND_API_KEY unset). email_test_mode correctly reports false (RESEND_TEST_OVERRIDE_EMAIL unset)."
   - task: "Production hardening — /docs, /redoc, /openapi.json disabled"
     implemented: true
     working: true
@@ -249,7 +249,7 @@ backend:
           comment: "Verified by curl: /docs, /redoc, /openapi.json all return 404 in staging. /api/health still returns 200."
         - working: true
           agent: "testing"
-          comment: "✅ PASSED (Backend). Backend correctly returns 404 for /docs, /redoc, /openapi.json when accessed directly (curl http://127.0.0.1:8001/docs -> 404). APP_ENV=production is set correctly. /api/health returns 200 with {status:'ok', service:'pnc-induction-api'}. NOTE: Public URL (https://trust-audit-staging.preview.emergentagent.com/docs) returns 200, but this is served by Kubernetes ingress/proxy layer, NOT the backend. Backend code is correct."
+          comment: "✅ PASSED (Backend). Backend correctly returns 404 for /docs, /redoc, /openapi.json when accessed directly (curl http://127.0.0.1:8001/docs -> 404). APP_ENV=production is set correctly. /api/health returns 200 with {status:'ok', service:'pnc-induction-api'}. NOTE: Public URL (https://pnc-start.preview.emergentagent.com/docs) returns 200, but this is served by Kubernetes ingress/proxy layer, NOT the backend. Backend code is correct."
   - task: "CORS locked to configured origin"
     implemented: true
     working: true
@@ -260,10 +260,10 @@ backend:
     status_history:
         - working: true
           agent: "main"
-          comment: "Verified: unknown Origin -> 400 on preflight; configured origin -> Access-Control-Allow-Origin header echoed. Env var: CORS_ORIGINS=https://trust-audit-staging.preview.emergentagent.com"
+          comment: "Verified: unknown Origin -> 400 on preflight; configured origin -> Access-Control-Allow-Origin header echoed. Env var: CORS_ORIGINS=https://pnc-start.preview.emergentagent.com"
         - working: true
           agent: "testing"
-          comment: "✅ PASSED. OPTIONS preflight with untrusted origin (https://phishing.example.com) returns 204 without echoing the untrusted origin in Access-Control-Allow-Origin header. CORS middleware correctly restricts origins to CORS_ORIGINS env var. Configured origin (https://trust-audit-staging.preview.emergentagent.com) is allowed."
+          comment: "✅ PASSED. OPTIONS preflight with untrusted origin (https://phishing.example.com) returns 204 without echoing the untrusted origin in Access-Control-Allow-Origin header. CORS middleware correctly restricts origins to CORS_ORIGINS env var. Configured origin (https://pnc-start.preview.emergentagent.com) is allowed."
   - task: "Email templates escape user-supplied strings"
     implemented: true
     working: true
@@ -406,7 +406,7 @@ agent_communication:
         has regressed. Key context for testing:
 
         1. Backend URL for tests: use REACT_APP_BACKEND_URL from
-           frontend/.env (currently https://trust-audit-staging.preview.emergentagent.com).
+           frontend/.env (currently https://pnc-start.preview.emergentagent.com).
         2. Admin credentials are in backend/.env
            (ADMIN_USERNAME + ADMIN_PASSWORD). Do NOT hardcode them.
         3. `RESEND_API_KEY` is intentionally UNSET for the audit — email

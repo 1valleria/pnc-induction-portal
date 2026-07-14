@@ -7,6 +7,6 @@
 
 Contact: mailto:admin@pncunique.com
 Preferred-Languages: en
-Canonical: https://trust-audit-staging.preview.emergentagent.com/.well-known/security.txt
-Policy: https://trust-audit-staging.preview.emergentagent.com/legal/terms
+Canonical: https://pnc-start.preview.emergentagent.com/.well-known/security.txt
+Policy: https://pnc-start.preview.emergentagent.com/legal/terms
 Expires: 2027-01-01T00:00:00Z

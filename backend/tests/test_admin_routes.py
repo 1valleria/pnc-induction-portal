@@ -16,7 +16,7 @@ import requests
 
 BASE_URL = os.environ.get(
     "REACT_APP_BACKEND_URL",
-    "https://trust-audit-staging.preview.emergentagent.com",
+    "https://pnc-start.preview.emergentagent.com",
 ).rstrip("/")
 
 ADMIN_USER = "pnc-admin"
