@@ -21,11 +21,14 @@ export default function SiteFooter() {
           </div>
           <div className="mt-3 space-y-1 leading-relaxed">
             <div>Registered in England and Wales</div>
-            <div>
-              Unit 1, Headlands House<br />
-              1 Kings Court, Kettering<br />
+            <address className="not-italic">
+              Headlands House<br />
+              1 Kings Court<br />
+              Kettering Parkway<br />
+              Kettering<br />
+              Northamptonshire<br />
               NN15 6WJ
-            </div>
+            </address>
             <div className="pt-1">
               <a href="mailto:info@pncunique.com" className="hover:text-[#1C1917] hover:underline">
                 info@pncunique.com

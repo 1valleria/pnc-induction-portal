@@ -56,9 +56,14 @@ export default function Contact() {
             <div className="text-[11px] uppercase tracking-[0.18em] font-semibold">Registered office</div>
           </div>
           <div className="mt-2 text-sm text-[#1C1917] leading-relaxed">
-            Unit 1, Headlands House<br />
-            1 Kings Court, Kettering<br />
-            NN15 6WJ, United Kingdom
+            <address className="not-italic">
+              Headlands House<br />
+              1 Kings Court<br />
+              Kettering Parkway<br />
+              Kettering<br />
+              Northamptonshire<br />
+              NN15 6WJ
+            </address>
           </div>
         </div>
       </div>

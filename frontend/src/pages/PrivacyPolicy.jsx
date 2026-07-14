@@ -14,7 +14,7 @@ export default function PrivacyPolicy() {
       </p>
       <ul>
         <li>
-          Registered office: Unit 1, Headlands House, 1 Kings Court, Kettering, NN15 6WJ.
+          Registered office: Headlands House, 1 Kings Court, Kettering Parkway, Kettering, Northamptonshire, NN15 6WJ.
         </li>
         <li>
           General enquiries:{" "}
