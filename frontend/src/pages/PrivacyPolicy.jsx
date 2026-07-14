@@ -4,7 +4,7 @@ import LegalShell from "@/components/LegalShell";
 export default function PrivacyPolicy() {
   return (
     <LegalShell title="Privacy Notice" subtitle="Legal">
-      <p><em>Last reviewed: <span data-placeholder="privacy-review-date">[to be confirmed]</span></em></p>
+      <p><em>Last reviewed: 14 July 2026</em></p>
 
       <h2>1. Who we are</h2>
       <p>
@@ -26,7 +26,7 @@ export default function PrivacyPolicy() {
           Data protection contact:{" "}
           <a href="mailto:admin@pncunique.com">admin@pncunique.com</a>
         </li>
-        <li>ICO Registration: <em data-placeholder="ico-registration">[to be confirmed]</em></li>
+        <li>ICO Registration: ZB865873</li>
       </ul>
 
       <h2>2. What we collect and why</h2>
@@ -70,8 +70,11 @@ export default function PrivacyPolicy() {
 
       <h2>6. How long we keep it</h2>
       <p>
-        We retain your induction record for the duration of your engagement with
-        PNC and for a minimum of <em data-placeholder="retention-period">[retention period to be confirmed — typically 6 years for tax and CDM purposes]</em> after your last day worked. After that period the record is deleted or fully anonymised.
+        We retain contractor onboarding records and associated documents
+        only for as long as necessary to fulfil legal, regulatory and
+        business obligations. In most cases, records are retained for
+        6 years after the end of the contractual relationship, unless a
+        longer retention period is required by law.
       </p>
 
       <h2>7. Your rights</h2>

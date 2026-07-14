@@ -4,7 +4,7 @@ import LegalShell from "@/components/LegalShell";
 export default function Terms() {
   return (
     <LegalShell title="Terms & Conditions of Use" subtitle="Legal">
-      <p><em>Last reviewed: <span data-placeholder="terms-review-date">[to be confirmed]</span></em></p>
+      <p><em>Last reviewed: 14 July 2026</em></p>
 
       <h2>1. About these Terms</h2>
       <p>
