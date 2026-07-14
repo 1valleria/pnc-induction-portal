@@ -5,7 +5,7 @@ import { GATE } from "@/constants/testIds";
 import { TextInput, Field } from "@/components/Field";
 import { Lock, ShieldCheck, ArrowRight } from "lucide-react";
 import SiteFooter from "@/components/SiteFooter";
-import BrandMark from "@/components/BrandMark";
+import { BrandWordmark } from "@/components/BrandMark";
 
 const API_BASE = process.env.REACT_APP_BACKEND_URL || "";
 
@@ -83,10 +83,8 @@ export default function AccessGate() {
       <div className="flex-1 flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-md">
           <div className="text-center mb-6">
-            <BrandMark size="lg" className="mx-auto mb-3" />
-            <h1 className="font-heading text-3xl tracking-tight text-[#1C1917]">
-              PNC UNIQUE LTD
-            </h1>
+            <BrandWordmark width={260} className="mx-auto mb-2" />
+            <h1 className="sr-only">PNC UNIQUE LTD</h1>
             <p className="text-xs uppercase tracking-[0.18em] font-semibold text-[#166534] mt-1">
               Contractor Induction Portal
             </p>

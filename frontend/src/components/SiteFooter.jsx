@@ -1,5 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { BrandWordmark } from "@/components/BrandMark";
 
 /**
  * Site-wide footer. All corporate identity fields are rendered as clearly
@@ -15,10 +16,8 @@ export default function SiteFooter() {
     >
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 grid grid-cols-1 sm:grid-cols-3 gap-6 text-[13px] text-[#57534E]">
         <div>
-          <div className="font-heading text-base text-[#1C1917] tracking-tight">
-            PNC UNIQUE LTD
-          </div>
-          <div className="text-[11px] uppercase tracking-[0.18em] font-semibold text-[#166534] mt-1">
+          <BrandWordmark width={170} className="mb-2" />
+          <div className="text-[11px] uppercase tracking-[0.18em] font-semibold text-[#166534]">
             Contractor Induction Portal
           </div>
           <div className="mt-3 space-y-1 leading-relaxed">

@@ -2,7 +2,7 @@ import React from "react";
 import { useSearchParams, Link } from "react-router-dom";
 import { CheckCircle2, FileText, Mail } from "lucide-react";
 import SiteFooter from "@/components/SiteFooter";
-import BrandMark from "@/components/BrandMark";
+import { BrandWordmark } from "@/components/BrandMark";
 
 export default function Success() {
   const [params] = useSearchParams();
@@ -13,7 +13,7 @@ export default function Success() {
       <div className="flex-1 flex items-start justify-center pt-14 pb-10 px-4">
         <div className="max-w-xl w-full">
           <div className="rounded-2xl bg-white border border-[#E7E5E4] shadow-sm p-6 sm:p-8 text-center">
-            <BrandMark size="lg" className="mx-auto mb-4" />
+            <BrandWordmark width={220} className="mx-auto mb-5" />
             <div className="mx-auto h-14 w-14 rounded-2xl bg-[#F0FDF4] border border-[#BBF7D0] flex items-center justify-center text-[#166534] mb-5">
               <CheckCircle2 className="h-7 w-7" strokeWidth={2} />
             </div>

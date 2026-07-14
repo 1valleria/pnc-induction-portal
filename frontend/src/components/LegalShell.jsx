@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import SiteFooter from "@/components/SiteFooter";
-import BrandMark from "@/components/BrandMark";
+import { BrandWordmark } from "@/components/BrandMark";
 
 /**
  * Shared layout for the static legal / about / contact pages. Renders a
@@ -14,11 +14,10 @@ export default function LegalShell({ title, subtitle, children }) {
     <div className="min-h-screen flex flex-col bg-[#FAFAF9]">
       <header className="bg-white border-b border-[#E7E5E4]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-3">
-          <BrandMark size="sm" />
-          <div className="leading-tight">
-            <div className="font-heading text-base text-[#1C1917] tracking-tight">
-              PNC UNIQUE LTD
-            </div>
+          <Link to="/" aria-label="Return to portal">
+            <BrandWordmark width={140} />
+          </Link>
+          <div className="leading-tight ml-1">
             <div className="text-[11px] uppercase tracking-[0.18em] font-semibold text-[#166534]">
               Contractor Induction Portal
             </div>
