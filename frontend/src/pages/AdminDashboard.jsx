@@ -26,6 +26,7 @@ const COLUMNS = [
   { label: "Passport", key: "passport_url", kind: "doc" },
   { label: "Right To Work", key: "right_to_work_share_code", kind: "text" },
   { label: "Proof Of Bank", key: "bank_proof_url", kind: "doc" },
+  { label: "Insurance Proof", key: "insurance_certificate_url", kind: "insurance" },
   { label: "Business Name", key: "company_name", kind: "text" },
   { label: "Account Number", key: "bank_account", kind: "text" },
   { label: "Sort Code", key: "sort_code", kind: "text" },
@@ -72,6 +73,51 @@ const StatusPill = ({ value, tone }) => (
 );
 
 function Cell({ col, value, row, onChangeReview }) {
+  if (col.kind === "insurance") {
+    // The Insurance Proof column shows the state of the "own vs covered by
+    // PNC" choice made in Step 1 of the wizard. Only inductees who chose
+    // "own" are required to upload a certificate; anyone covered by PNC's
+    // £5/wk group policy has no certificate to show.
+    const option = (row && (row.insurance_option || "")).toString().toLowerCase();
+    const url = value;
+    if (option === "own") {
+      if (url) {
+        return (
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            data-testid="insurance-cell-own-provided"
+            className="inline-flex items-center gap-1 text-[#166534] hover:underline text-xs whitespace-nowrap"
+            title="View liability-insurance certificate"
+          >
+            <CheckCircle2 className="h-3 w-3" /> View <ExternalLink className="h-3 w-3" />
+          </a>
+        );
+      }
+      return (
+        <span
+          data-testid="insurance-cell-own-missing"
+          className="inline-flex items-center gap-1 text-[#B91C1C] text-[11px] font-medium whitespace-nowrap"
+          title="Own-insurance selected but certificate not uploaded"
+        >
+          <XCircle className="h-3 w-3" /> Missing
+        </span>
+      );
+    }
+    if (option === "pnc") {
+      return (
+        <span
+          data-testid="insurance-cell-pnc"
+          className="inline-flex items-center gap-1 text-[#57534E] text-[11px] font-medium whitespace-nowrap"
+          title="Covered by PNC's group liability policy (£5/wk)"
+        >
+          Covered by PNC
+        </span>
+      );
+    }
+    return <span className="text-[#A8A29E] text-xs">—</span>;
+  }
   if (col.kind === "invoice_service") {
     const requested = Boolean(value);
     const emails = (row && Array.isArray(row.invoice_emails)) ? row.invoice_emails : [];
