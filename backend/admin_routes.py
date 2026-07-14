@@ -297,7 +297,12 @@ def system_status() -> dict[str, Any]:
     """Expose the safety-relevant runtime config so the Admin Portal can show
     a clear 'Test Mode' banner when emails are being redirected."""
     override = os.environ.get("RESEND_TEST_OVERRIDE_EMAIL")
-    sender = os.environ.get("SENDER_EMAIL") or "onboarding@resend.dev"
+    sender_email = os.environ.get("SENDER_EMAIL") or "admin@pnc-admin.com"
+    sender_name = (os.environ.get("SENDER_NAME") or "").strip() or None
+    sender_display = (
+        f"{sender_name} <{sender_email}>" if sender_name else sender_email
+    )
+    reply_to = (os.environ.get("REPLY_TO_EMAIL") or "").strip() or None
     portal = os.environ.get("PUBLIC_PORTAL_URL") or ""
     # Default manager emails — auto-populated in the review modal. Comma or
     # semicolon separated in the env var, parsed the same way as user input.
@@ -311,7 +316,10 @@ def system_status() -> dict[str, Any]:
     return {
         "email_test_mode": bool(override),
         "email_redirect_to": override or None,
-        "sender_email": sender,
+        "sender_email": sender_email,
+        "sender_name": sender_name,
+        "sender_display": sender_display,
+        "reply_to_email": reply_to,
         "portal_url": portal,
         "resend_configured": bool(os.environ.get("RESEND_API_KEY")),
         "default_manager_emails": default_manager_emails,

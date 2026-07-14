@@ -28,7 +28,7 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 
 # Retired brand strings that MUST NOT appear in any response
 # NOTE: "pncunique" is LEGITIMATE (company email domain) - do NOT flag it
-RETIRED_STRINGS = ["induct-pro", "pnc-induction.co.uk", "Unit 1, Headlands House"]
+RETIRED_STRINGS = ["induct-pro", "pnc-induction.co.uk", "Unit 1, Headlands House", "onboarding@resend.dev"]
 
 # Test state (shared across test functions)
 test_state = {
@@ -331,7 +331,7 @@ def test_cors_protection():
 def test_system_status():
     """Verify GET /api/admin/system-status returns correct config."""
     log("=" * 80)
-    log("TEST: Admin System Status")
+    log("TEST: Admin System Status (Email Config Verification)")
     log("=" * 80)
     
     results = []
@@ -346,26 +346,43 @@ def test_system_status():
         data = resp.json()
         log(f"Response: {data}")
         
-        # Verify resend_configured is false (RESEND_API_KEY unset)
-        if data.get("resend_configured") == False:
-            log("✅ resend_configured is false (correct)")
-            results.append(("resend_configured_false", True))
-        else:
-            log(f"❌ resend_configured should be false, got {data.get('resend_configured')}", "ERROR")
-            results.append(("resend_configured_false", False))
+        # A. Verify exact email config values
+        expected_values = {
+            "sender_email": "admin@pnc-admin.com",
+            "sender_name": "PNC Onboarding",
+            "sender_display": "PNC Onboarding <admin@pnc-admin.com>",
+            "reply_to_email": "admin@pncunique.com",
+            "resend_configured": False,
+            "default_manager_emails": ["admin@pncunique.com"],
+            "email_test_mode": False,
+            "email_redirect_to": None,
+        }
         
-        # Verify email_test_mode is false
-        if data.get("email_test_mode") == False:
-            log("✅ email_test_mode is false (correct)")
-            results.append(("email_test_mode_false", True))
-        else:
-            log(f"❌ email_test_mode should be false, got {data.get('email_test_mode')}", "ERROR")
-            results.append(("email_test_mode_false", False))
+        all_correct = True
+        for key, expected in expected_values.items():
+            actual = data.get(key)
+            if actual == expected:
+                log(f"✅ {key}: {actual}")
+            else:
+                log(f"❌ {key}: expected {expected!r}, got {actual!r}", "ERROR")
+                all_correct = False
+                results.append((f"system_status_{key}", False))
         
-        # Check for retired strings
+        if all_correct:
+            log("✅ All email config values match expected")
+            results.append(("system_status_email_config", True))
+        else:
+            results.append(("system_status_email_config", False))
+        
+        # Check for retired strings (including onboarding@resend.dev)
         response_text = resp.text
         found = check_retired_strings(response_text, "system-status response")
-        results.append(("system_status_no_retired_strings", len(found) == 0))
+        if len(found) == 0:
+            log("✅ No retired strings found in system-status response")
+            results.append(("system_status_no_retired_strings", True))
+        else:
+            log(f"❌ Found retired strings: {found}", "ERROR")
+            results.append(("system_status_no_retired_strings", False))
         
         results.append(("system_status_endpoint", True))
     else:

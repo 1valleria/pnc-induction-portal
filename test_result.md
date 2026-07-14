@@ -454,6 +454,53 @@ frontend:
         - working: true
           agent: "testing"
           comment: "✅ PASSED (Backend portion). Verified: (1) GET /sitemap.xml returns 200 with all 5 expected <loc> entries: /, /about, /contact, /legal/privacy, /legal/terms - all with correct origin https://pnc-start.preview.emergentagent.com. (2) GET /robots.txt returns 200 with 'Sitemap: https://pnc-start.preview.emergentagent.com/sitemap.xml' line present. (3) GET /.well-known/security.txt returns 200 with correct origin in content. Frontend index.html meta tags (canonical, og:url, og:image, twitter:url, twitter:image) NOT tested as this is frontend verification - outside scope of backend testing."
+  - task: "Email sender / reply-to / display-name config (SENDER_EMAIL=admin@pnc-admin.com, SENDER_NAME=\"PNC Onboarding\", REPLY_TO_EMAIL=admin@pncunique.com)"
+    implemented: true
+    working: "NA"
+    file: "backend/email_service.py, backend/admin_routes.py, backend/.env"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: |
+            Config-only change (no business logic touched).
+            Applied edits:
+              1. backend/.env: SENDER_EMAIL now admin@pnc-admin.com (was
+                 onboarding@resend.dev). New keys:
+                 SENDER_NAME=PNC Onboarding
+                 REPLY_TO_EMAIL=admin@pncunique.com
+                 DEFAULT_MANAGER_EMAILS preserved as admin@pncunique.com.
+              2. backend/email_service.py: new _sender_email(), _sender()
+                 (formats "Name <email>"), _reply_to(). send_email() now
+                 attaches reply_to=[REPLY_TO_EMAIL] to Resend params when
+                 the env var is set. Sandbox fallback default was changed
+                 from onboarding@resend.dev to admin@pnc-admin.com.
+              3. backend/admin_routes.py: /system-status returns
+                 sender_name, sender_display and reply_to_email in
+                 addition to sender_email. onboarding@resend.dev
+                 fallback in this file was also replaced.
+
+            RESEND_API_KEY is still intentionally UNSET, so every send
+            still returns {status:"skipped", reason:"resend_not_configured"} —
+            NOT "failed". This is expected.
+
+            Please verify:
+              A. GET /api/admin/system-status returns:
+                 - sender_email:   "admin@pnc-admin.com"
+                 - sender_name:    "PNC Onboarding"
+                 - sender_display: "PNC Onboarding <admin@pnc-admin.com>"
+                 - reply_to_email: "admin@pncunique.com"
+                 - resend_configured: false
+                 - default_manager_emails: ["admin@pncunique.com"]
+              B. POST /api/admin/invites with send_email:true still
+                 returns email_result.status "skipped".
+              C. PATCH /api/admin/employees/{id}/review with review_status
+                 "approved" and "rejected" still returns email_status "skipped".
+              D. No API response body/header contains "onboarding@resend.dev".
+              E. All existing endpoints unchanged in shape.
+
 
 metadata:
   created_by: "main_agent"

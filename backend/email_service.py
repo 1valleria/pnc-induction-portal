@@ -28,8 +28,38 @@ def _configured() -> bool:
     return bool(os.environ.get("RESEND_API_KEY"))
 
 
+def _sender_email() -> str:
+    """Return the bare email address used as the envelope sender.
+
+    Falls back to `admin@pnc-admin.com` — the domain currently being verified
+    at Resend. The fallback exists so a mis-deploy that drops SENDER_EMAIL does
+    not accidentally send from the (now-retired) `onboarding@resend.dev`
+    sandbox address.
+    """
+    return os.environ.get("SENDER_EMAIL") or "admin@pnc-admin.com"
+
+
 def _sender() -> str:
-    return os.environ.get("SENDER_EMAIL") or "onboarding@resend.dev"
+    """Return the RFC 5322 `From:` value.
+
+    If SENDER_NAME is set, formats as ``Name <email>`` so mail clients render
+    the friendly display name in the inbox. Otherwise returns the bare address.
+    """
+    email_addr = _sender_email()
+    name = (os.environ.get("SENDER_NAME") or "").strip()
+    if name:
+        return f"{name} <{email_addr}>"
+    return email_addr
+
+
+def _reply_to() -> str | None:
+    """Return the address to set as the `Reply-To:` header, or None if unset.
+
+    Configured via REPLY_TO_EMAIL so replies land in a monitored PNC mailbox
+    rather than the sending-domain address (which is typically unmonitored).
+    """
+    value = (os.environ.get("REPLY_TO_EMAIL") or "").strip()
+    return value or None
 
 
 def _resolve_recipient(to: str) -> tuple[str, str | None]:
@@ -83,6 +113,12 @@ async def send_email(
         "subject": subject,
         "html": html,
     }
+    reply_to_addr = _reply_to()
+    if reply_to_addr:
+        # Resend accepts either a single string or a list. Sending as a list
+        # matches the shape the SDK exposes and future-proofs multi-address
+        # reply routing (e.g. HR + a shared inbox) without another code edit.
+        params["reply_to"] = [reply_to_addr]
 
     record: dict[str, Any] = {
         "to": to,
