@@ -16,7 +16,7 @@ import requests
 
 BASE_URL = os.environ.get(
     "REACT_APP_BACKEND_URL",
-    "https://induct-pro.preview.emergentagent.com",
+    "https://trust-audit-staging.preview.emergentagent.com",
 ).rstrip("/")
 
 EXISTING_EMPLOYEE_ID = "0EApcMofHgM1BpaqraJQ"
