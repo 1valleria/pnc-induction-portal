@@ -16,10 +16,19 @@ export default function Contact() {
         <div className="rounded-xl border border-[#E7E5E4] bg-white p-5">
           <div className="flex items-center gap-2 text-[#166534]">
             <Mail className="h-4 w-4" />
-            <div className="text-[11px] uppercase tracking-[0.18em] font-semibold">HR email</div>
+            <div className="text-[11px] uppercase tracking-[0.18em] font-semibold">General enquiries</div>
           </div>
-          <div className="mt-2 text-sm text-[#1C1917]" data-placeholder="hr-email">
-            <em className="text-[#78716C]">[HR email to be confirmed]</em>
+          <div className="mt-2 text-sm text-[#1C1917]">
+            <a href="mailto:info@pncunique.com" className="hover:underline">info@pncunique.com</a>
+          </div>
+        </div>
+        <div className="rounded-xl border border-[#E7E5E4] bg-white p-5">
+          <div className="flex items-center gap-2 text-[#166534]">
+            <Mail className="h-4 w-4" />
+            <div className="text-[11px] uppercase tracking-[0.18em] font-semibold">Admin &amp; HR</div>
+          </div>
+          <div className="mt-2 text-sm text-[#1C1917]">
+            <a href="mailto:admin@pncunique.com" className="hover:underline">admin@pncunique.com</a>
           </div>
         </div>
         <div className="rounded-xl border border-[#E7E5E4] bg-white p-5">
@@ -27,8 +36,8 @@ export default function Contact() {
             <Phone className="h-4 w-4" />
             <div className="text-[11px] uppercase tracking-[0.18em] font-semibold">Telephone</div>
           </div>
-          <div className="mt-2 text-sm text-[#1C1917]" data-placeholder="hr-phone">
-            <em className="text-[#78716C]">[HR phone to be confirmed]</em>
+          <div className="mt-2 text-sm text-[#1C1917]">
+            <a href="tel:+443330905024" className="hover:underline">0333 090 5024</a>
           </div>
         </div>
         <div className="rounded-xl border border-[#E7E5E4] bg-white p-5">
@@ -37,20 +46,19 @@ export default function Contact() {
             <div className="text-[11px] uppercase tracking-[0.18em] font-semibold">Registered company</div>
           </div>
           <div className="mt-2 text-sm text-[#1C1917]">
-            PNC UNIQUE LTD
-            <br />
-            <span data-placeholder="company-number" className="text-[#78716C]">
-              Company Number: <em>[to be confirmed]</em>
-            </span>
+            PNC UNIQUE LTD<br />
+            <span className="text-[#57534E]">Registered in England and Wales</span>
           </div>
         </div>
-        <div className="rounded-xl border border-[#E7E5E4] bg-white p-5">
+        <div className="rounded-xl border border-[#E7E5E4] bg-white p-5 sm:col-span-2">
           <div className="flex items-center gap-2 text-[#166534]">
             <MapPin className="h-4 w-4" />
             <div className="text-[11px] uppercase tracking-[0.18em] font-semibold">Registered office</div>
           </div>
-          <div className="mt-2 text-sm text-[#1C1917]" data-placeholder="registered-address">
-            <em className="text-[#78716C]">[registered address to be confirmed]</em>
+          <div className="mt-2 text-sm text-[#1C1917] leading-relaxed">
+            Unit 1, Headlands House<br />
+            1 Kings Court, Kettering<br />
+            NN15 6WJ, United Kingdom
           </div>
         </div>
       </div>
@@ -59,8 +67,9 @@ export default function Contact() {
       <p>
         If you have received a suspicious email that claims to be from
         PNC UNIQUE LTD, please do <strong>not</strong> click any links.
-        Forward the message to <em data-placeholder="security-email">[security contact to be confirmed]</em>
-        and delete the original.
+        Forward the message to{" "}
+        <a href="mailto:admin@pncunique.com">admin@pncunique.com</a>
+        {" "}and delete the original.
       </p>
     </LegalShell>
   );

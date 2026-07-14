@@ -3,9 +3,8 @@ import { Link } from "react-router-dom";
 import { BrandWordmark } from "@/components/BrandMark";
 
 /**
- * Site-wide footer. All corporate identity fields are rendered as clearly
- * marked placeholders so the operator can populate them before go-live.
- * The `data-placeholder` attribute lets us grep for pending items.
+ * Site-wide footer. Corporate identity is rendered from the values below —
+ * see /app/memory/PRD.md for the source of truth.
  */
 export default function SiteFooter() {
   return (
@@ -21,17 +20,21 @@ export default function SiteFooter() {
             Contractor Induction Portal
           </div>
           <div className="mt-3 space-y-1 leading-relaxed">
+            <div>Registered in England and Wales</div>
             <div>
-              Registered in England and Wales
+              Unit 1, Headlands House<br />
+              1 Kings Court, Kettering<br />
+              NN15 6WJ
             </div>
-            <div data-placeholder="company-number">
-              Company Number: <span className="italic text-[#78716C]">[to be confirmed]</span>
+            <div className="pt-1">
+              <a href="mailto:info@pncunique.com" className="hover:text-[#1C1917] hover:underline">
+                info@pncunique.com
+              </a>
             </div>
-            <div data-placeholder="registered-address">
-              Registered Office: <span className="italic text-[#78716C]">[to be confirmed]</span>
-            </div>
-            <div data-placeholder="corporate-email">
-              Corporate contact: <span className="italic text-[#78716C]">[to be confirmed]</span>
+            <div>
+              <a href="tel:+443330905024" className="hover:text-[#1C1917] hover:underline">
+                0333 090 5024
+              </a>
             </div>
           </div>
         </div>

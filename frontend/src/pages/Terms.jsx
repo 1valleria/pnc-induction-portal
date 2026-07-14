@@ -82,8 +82,8 @@ export default function Terms() {
 
       <h2>11. Contact</h2>
       <p>
-        Questions about these Terms should be sent to
-        <em data-placeholder="corporate-email"> [corporate contact email to be confirmed]</em>.
+        Questions about these Terms should be sent to{" "}
+        <a href="mailto:info@pncunique.com">info@pncunique.com</a>.
       </p>
     </LegalShell>
   );

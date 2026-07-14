@@ -8,15 +8,24 @@ export default function PrivacyPolicy() {
 
       <h2>1. Who we are</h2>
       <p>
-        <strong>PNC UNIQUE LTD</strong> (&quot;PNC&quot;, &quot;we&quot;, &quot;us&quot;) is the
-        data controller for the personal information collected through this
-        Contractor Induction Portal. Our registered office and contact details are
-        published in the footer of every page.
+        <strong>PNC UNIQUE LTD</strong> (&quot;PNC&quot;, &quot;we&quot;, &quot;us&quot;) is
+        the data controller for the personal information collected through this
+        Contractor Induction Portal.
       </p>
       <ul>
-        <li>Company Number: <em data-placeholder="company-number">[to be confirmed]</em></li>
-        <li>Registered Office: <em data-placeholder="registered-address">[to be confirmed]</em></li>
-        <li>Data Protection Contact: <em data-placeholder="dpo-email">[to be confirmed]</em></li>
+        <li>
+          Registered office: Unit 1, Headlands House, 1 Kings Court, Kettering, NN15 6WJ.
+        </li>
+        <li>
+          General enquiries:{" "}
+          <a href="mailto:info@pncunique.com">info@pncunique.com</a>
+          {" \u00b7 "}
+          <a href="tel:+443330905024">0333 090 5024</a>
+        </li>
+        <li>
+          Data protection contact:{" "}
+          <a href="mailto:admin@pncunique.com">admin@pncunique.com</a>
+        </li>
         <li>ICO Registration: <em data-placeholder="ico-registration">[to be confirmed]</em></li>
       </ul>
 
@@ -76,7 +85,7 @@ export default function PrivacyPolicy() {
         <li>Withdraw consent where processing was consent-based.</li>
       </ul>
       <p>
-        Please make requests via <em data-placeholder="dpo-email">[data protection contact to be confirmed]</em>.
+        Please make requests via <a href="mailto:admin@pncunique.com">admin@pncunique.com</a>.
         You may also complain to the UK Information Commissioner&#39;s Office
         (<a href="https://ico.org.uk" target="_blank" rel="noreferrer">ico.org.uk</a>, 0303 123 1113).
       </p>

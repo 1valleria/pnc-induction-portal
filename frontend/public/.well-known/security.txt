@@ -5,7 +5,7 @@
 # include exploitation details in the first email; we will co-ordinate a
 # secure channel for follow-up.
 
-Contact: mailto:security-placeholder@example.com
+Contact: mailto:admin@pncunique.com
 Preferred-Languages: en
 Canonical: https://trust-audit-staging.preview.emergentagent.com/.well-known/security.txt
 Policy: https://trust-audit-staging.preview.emergentagent.com/legal/terms
