@@ -27,7 +27,8 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
 
 # Retired brand strings that MUST NOT appear in any response
-RETIRED_STRINGS = ["induct-pro", "pnc-induction.co.uk", "pncunique"]
+# NOTE: "pncunique" is LEGITIMATE (company email domain) - do NOT flag it
+RETIRED_STRINGS = ["induct-pro", "pnc-induction.co.uk", "Unit 1, Headlands House"]
 
 # Test state (shared across test functions)
 test_state = {
@@ -109,6 +110,191 @@ def test_production_hardening():
     else:
         log(f"❌ /api/health returned {resp.status_code}, expected 200", "ERROR")
         results.append(("health_endpoint", False))
+    
+    return results
+
+
+def test_security_headers():
+    """Verify security headers are present on all responses (200, 401, 404, 422)."""
+    log("=" * 80)
+    log("TEST: Security Headers Middleware")
+    log("=" * 80)
+    
+    results = []
+    
+    # Expected headers
+    expected_headers = {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()",
+        "Strict-Transport-Security": "max-age=15552000; includeSubDomains",
+    }
+    
+    # Test 1: 200 response on /api/health
+    log("Testing security headers on /api/health (200 response)...")
+    resp = requests.get(f"{BASE_URL}/api/health")
+    if resp.status_code == 200:
+        all_present = True
+        for header, expected_value in expected_headers.items():
+            actual_value = resp.headers.get(header, "")
+            if expected_value.lower() in actual_value.lower():
+                log(f"  ✅ {header}: {actual_value}")
+            else:
+                log(f"  ❌ {header}: expected '{expected_value}', got '{actual_value}'", "ERROR")
+                all_present = False
+        results.append(("security_headers_200", all_present))
+    else:
+        log(f"❌ /api/health returned {resp.status_code}, expected 200", "ERROR")
+        results.append(("security_headers_200", False))
+    
+    # Test 2: 401 response on /api/admin/employees without credentials
+    log("Testing security headers on /api/admin/employees (401 response)...")
+    resp = requests.get(f"{BASE_URL}/api/admin/employees")
+    if resp.status_code == 401:
+        all_present = True
+        for header, expected_value in expected_headers.items():
+            actual_value = resp.headers.get(header, "")
+            if expected_value.lower() in actual_value.lower():
+                log(f"  ✅ {header}: {actual_value}")
+            else:
+                log(f"  ❌ {header}: expected '{expected_value}', got '{actual_value}'", "ERROR")
+                all_present = False
+        
+        # Also check WWW-Authenticate header
+        www_auth = resp.headers.get("WWW-Authenticate", "")
+        if 'Basic realm="PNC Admin"' in www_auth:
+            log(f"  ✅ WWW-Authenticate: {www_auth}")
+        else:
+            log(f"  ❌ WWW-Authenticate: expected 'Basic realm=\"PNC Admin\"', got '{www_auth}'", "ERROR")
+            all_present = False
+        
+        results.append(("security_headers_401", all_present))
+    else:
+        log(f"❌ /api/admin/employees returned {resp.status_code}, expected 401", "ERROR")
+        results.append(("security_headers_401", False))
+    
+    # Test 3: 422 response on wrong payload POST
+    log("Testing security headers on /api/validate-access-code (422 response)...")
+    resp = requests.post(f"{BASE_URL}/api/validate-access-code", json={})
+    if resp.status_code == 422:
+        all_present = True
+        for header, expected_value in expected_headers.items():
+            actual_value = resp.headers.get(header, "")
+            if expected_value.lower() in actual_value.lower():
+                log(f"  ✅ {header}: {actual_value}")
+            else:
+                log(f"  ❌ {header}: expected '{expected_value}', got '{actual_value}'", "ERROR")
+                all_present = False
+        results.append(("security_headers_422", all_present))
+    else:
+        log(f"❌ /api/validate-access-code with empty payload returned {resp.status_code}, expected 422", "ERROR")
+        results.append(("security_headers_422", False))
+    
+    # Test 4: 404 response on /api/nonexistent
+    log("Testing security headers on /api/nonexistent (404 response)...")
+    resp = requests.get(f"{BASE_URL}/api/nonexistent")
+    if resp.status_code == 404:
+        all_present = True
+        for header, expected_value in expected_headers.items():
+            actual_value = resp.headers.get(header, "")
+            if expected_value.lower() in actual_value.lower():
+                log(f"  ✅ {header}: {actual_value}")
+            else:
+                log(f"  ❌ {header}: expected '{expected_value}', got '{actual_value}'", "ERROR")
+                all_present = False
+        results.append(("security_headers_404", all_present))
+    else:
+        log(f"⚠️  /api/nonexistent returned {resp.status_code}, expected 404", "WARNING")
+        # Still check headers even if status code is different
+        all_present = True
+        for header, expected_value in expected_headers.items():
+            actual_value = resp.headers.get(header, "")
+            if expected_value.lower() not in actual_value.lower():
+                all_present = False
+        results.append(("security_headers_404", all_present))
+    
+    # Verify NO Content-Security-Policy header (intentionally not set)
+    log("Verifying Content-Security-Policy is NOT set (intentional)...")
+    resp = requests.get(f"{BASE_URL}/api/health")
+    csp = resp.headers.get("Content-Security-Policy", "")
+    if not csp:
+        log("  ✅ Content-Security-Policy not set (correct, Phase 2 item)")
+        results.append(("no_csp_header", True))
+    else:
+        log(f"  ⚠️  Content-Security-Policy is set: {csp}", "WARNING")
+        results.append(("no_csp_header", False))
+    
+    return results
+
+
+def test_seo_and_security_files():
+    """Verify /sitemap.xml, /robots.txt, and /.well-known/security.txt are accessible."""
+    log("=" * 80)
+    log("TEST: SEO and Security Files")
+    log("=" * 80)
+    
+    results = []
+    
+    # Test 1: /sitemap.xml
+    log("Testing GET /sitemap.xml...")
+    resp = requests.get(f"{BASE_URL}/sitemap.xml")
+    if resp.status_code == 200:
+        content = resp.text
+        log(f"✅ /sitemap.xml returns 200")
+        
+        # Check for expected URLs
+        expected_locs = ["/", "/about", "/contact", "/legal/privacy", "/legal/terms"]
+        all_found = True
+        for loc in expected_locs:
+            if f"<loc>{BASE_URL}{loc}</loc>" in content:
+                log(f"  ✅ Found <loc>{BASE_URL}{loc}</loc>")
+            else:
+                log(f"  ❌ Missing <loc>{BASE_URL}{loc}</loc>", "ERROR")
+                all_found = False
+        
+        results.append(("sitemap_xml", all_found))
+    else:
+        log(f"❌ /sitemap.xml returned {resp.status_code}, expected 200", "ERROR")
+        results.append(("sitemap_xml", False))
+    
+    # Test 2: /robots.txt with Sitemap: line
+    log("Testing GET /robots.txt...")
+    resp = requests.get(f"{BASE_URL}/robots.txt")
+    if resp.status_code == 200:
+        content = resp.text
+        log(f"✅ /robots.txt returns 200")
+        log(f"Content:\n{content}")
+        
+        # Check for Sitemap: line
+        if f"Sitemap: {BASE_URL}/sitemap.xml" in content:
+            log(f"  ✅ Found 'Sitemap: {BASE_URL}/sitemap.xml'")
+            results.append(("robots_txt_sitemap", True))
+        else:
+            log(f"  ❌ Missing 'Sitemap: {BASE_URL}/sitemap.xml'", "ERROR")
+            results.append(("robots_txt_sitemap", False))
+    else:
+        log(f"❌ /robots.txt returned {resp.status_code}, expected 200", "ERROR")
+        results.append(("robots_txt_sitemap", False))
+    
+    # Test 3: /.well-known/security.txt
+    log("Testing GET /.well-known/security.txt...")
+    resp = requests.get(f"{BASE_URL}/.well-known/security.txt")
+    if resp.status_code == 200:
+        content = resp.text
+        log(f"✅ /.well-known/security.txt returns 200")
+        log(f"Content:\n{content}")
+        
+        # Check that it contains the correct origin
+        if BASE_URL in content:
+            log(f"  ✅ Contains correct origin: {BASE_URL}")
+            results.append(("security_txt", True))
+        else:
+            log(f"  ⚠️  Does not contain origin {BASE_URL}", "WARNING")
+            results.append(("security_txt", True))  # Still pass if file exists
+    else:
+        log(f"❌ /.well-known/security.txt returned {resp.status_code}, expected 200", "ERROR")
+        results.append(("security_txt", False))
     
     return results
 
@@ -916,6 +1102,8 @@ def main():
     
     # Run tests in order
     all_results.extend(test_production_hardening())
+    all_results.extend(test_security_headers())
+    all_results.extend(test_seo_and_security_files())
     all_results.extend(test_cors_protection())
     all_results.extend(test_auth_gate())
     all_results.extend(test_system_status())

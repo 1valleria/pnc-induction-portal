@@ -21,6 +21,7 @@ from typing import Any
 from dotenv import load_dotenv
 from fastapi import APIRouter, FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
 ROOT_DIR = Path(__file__).parent
@@ -948,7 +949,44 @@ app.include_router(api_router)
 from admin_routes import admin_router  # noqa: E402
 app.include_router(admin_router)
 
-# CORS \u2014 strict allow-list from env. Never allow `*` when credentials are on.
+
+# ---------------------------------------------------------------------------
+# Security headers — applied to every response.
+# Applied AFTER routers are wired so the middleware sees every API response.
+# Kept intentionally minimal so we do not break the React SPA:
+#   * X-Content-Type-Options: nosniff        — stops MIME sniffing
+#   * X-Frame-Options: DENY                  — stops clickjacking of every route
+#   * Referrer-Policy                        — do not leak URL params cross-site
+#   * Permissions-Policy                     — deny sensor / hardware APIs we do not use
+#   * Strict-Transport-Security              — force HTTPS on future visits (safe;
+#                                              Kubernetes ingress already terminates TLS)
+# No Content-Security-Policy is set here because the SPA loads Firebase Web SDK,
+# Google Fonts and inline hydration scripts — the CSP would need to be authored
+# and tested against every page before enabling. Left as a Phase 2 item.
+# ---------------------------------------------------------------------------
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault(
+            "Permissions-Policy",
+            "camera=(), microphone=(), geolocation=(), payment=(), usb=(), "
+            "interest-cohort=()",
+        )
+        response.headers.setdefault(
+            "Strict-Transport-Security",
+            "max-age=15552000; includeSubDomains",
+        )
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+# CORS — strict allow-list from env. Never allow `*` when credentials are on.
 _raw_origins = os.environ.get("CORS_ORIGINS", "").strip()
 _allow_origins = [o.strip() for o in _raw_origins.split(",") if o.strip()] if _raw_origins else []
 if not _allow_origins:

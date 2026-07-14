@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PNC UNIQUE LTD Contractor Induction Portal — sitemap.
+
+  Only public, indexable pages are listed. The /induction, /success and /admin
+  routes are gated to authenticated inductees / HR and are Disallowed in
+  robots.txt; they are intentionally excluded here.
+
+  If the public origin changes at production go-live, update the <loc>
+  entries below to match the new host.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://pnc-start.preview.emergentagent.com/</loc>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://pnc-start.preview.emergentagent.com/about</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://pnc-start.preview.emergentagent.com/contact</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://pnc-start.preview.emergentagent.com/legal/privacy</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+  <url>
+    <loc>https://pnc-start.preview.emergentagent.com/legal/terms</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.4</priority>
+  </url>
+</urlset>

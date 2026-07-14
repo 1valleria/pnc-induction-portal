@@ -12,18 +12,23 @@
     <meta name="apple-mobile-web-app-title" content="PNC UNIQUE LTD Induction" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
 
+    <!-- Canonical origin (env-driven so a hostname swap does not require a code change). -->
+    <link rel="canonical" href="%REACT_APP_BACKEND_URL%/" />
+
     <!-- Open Graph / Twitter -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="PNC UNIQUE LTD Contractor Induction Portal" />
     <meta property="og:title" content="PNC UNIQUE LTD Contractor Induction Portal" />
     <meta property="og:description" content="Secure digital on-boarding for approved PNC UNIQUE LTD subcontractors." />
-    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:url" content="%REACT_APP_BACKEND_URL%/" />
+    <meta property="og:image" content="%REACT_APP_BACKEND_URL%/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="%REACT_APP_BACKEND_URL%/" />
     <meta name="twitter:title" content="PNC UNIQUE LTD Contractor Induction Portal" />
     <meta name="twitter:description" content="Secure digital on-boarding for approved PNC UNIQUE LTD subcontractors." />
-    <meta name="twitter:image" content="/og-image.png" />
+    <meta name="twitter:image" content="%REACT_APP_BACKEND_URL%/og-image.png" />
 
     <!-- Favicon set -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="any" />

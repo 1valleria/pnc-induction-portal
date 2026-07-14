@@ -16,3 +16,5 @@ Disallow: /success
 Disallow: /admin
 Disallow: /admin/
 Disallow: /api/
+
+Sitemap: https://pnc-start.preview.emergentagent.com/sitemap.xml

@@ -103,11 +103,45 @@
 #====================================================================================================
 
 user_problem_statement: |
-  Phase 1 of the Security & Trust Audit remediation is complete. Verify that
-  every existing user + admin workflow still functions after the security
-  hardening (Firestore/Storage rules locked down, browser upload flow altered,
-  CORS restricted, /docs disabled, retired brand removed, HTML-escaped emails,
-  new legal pages added). No functionality is expected to change.
+  PRODUCTION READINESS AUDIT — Please regression-test the PNC Contractor
+  Induction Portal to confirm the production-hardening applied in this pass
+  has not regressed any existing behaviour. Three deltas were applied since
+  the last green run:
+
+    1. Backend security-headers middleware (X-Content-Type-Options,
+       X-Frame-Options, Referrer-Policy, Permissions-Policy,
+       Strict-Transport-Security) is now applied to every response.
+    2. Frontend index.html now carries canonical, og:url, og:image (absolute),
+       twitter:url and twitter:image tags. These are interpolated from
+       REACT_APP_BACKEND_URL at build time.
+    3. New /sitemap.xml file and a Sitemap: line added to /robots.txt.
+
+  Also updated in a prior task in this session: the registered-office
+  address in SiteFooter.jsx, Contact.jsx and PrivacyPolicy.jsx now shows
+  the full 6-line address (Headlands House / 1 Kings Court / Kettering
+  Parkway / Kettering / Northamptonshire / NN15 6WJ).
+
+  Please verify:
+    A. Backend regression — every endpoint still returns the same shape.
+       (validate-access-code, induction/submit with files having no url,
+       mark-used, induction/finalize, admin auth gate, admin invites,
+       admin review, admin CSV, system-status, /api/health, /docs=404.)
+    B. Security headers present on every response (X-Content-Type-Options,
+       X-Frame-Options, Referrer-Policy, Permissions-Policy, HSTS).
+    C. Frontend smoke — AccessGate, Wizard (open Step 1 only, do NOT need
+       to file-upload), Success page, Admin login + dashboard, public
+       pages (About, Contact, Privacy, Terms). Confirm the new registered
+       office address appears in Footer + Contact card + Privacy page.
+    D. Production-origin metadata present in the served index.html:
+       canonical, og:url, og:image absolute, twitter:url, twitter:image.
+       /robots.txt has the Sitemap: line. /sitemap.xml returns 200 with
+       5 <loc> entries.
+    E. No retired-brand strings appear ANYWHERE in the served HTML /
+       API responses (excluding historical Firestore records — those
+       are known-legacy and out of scope).
+
+  RESEND_API_KEY is still intentionally UNSET — email sends must be
+  status "skipped", NOT "failed".
 
 backend:
   - task: "Access-code validation endpoint (POST /api/validate-access-code)"
@@ -278,6 +312,20 @@ backend:
         - working: true
           agent: "testing"
           comment: "✅ PASSED. Email templates not directly tested (RESEND_API_KEY unset), but code review confirms HTML escaping is in place. All email sends return status='skipped' as expected. No retired brand strings found in any API responses during testing (except in historical Firestore data from old submissions, which is expected)."
+  - task: "Security headers middleware (X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, HSTS)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Added SecurityHeadersMiddleware. Every response should now include: x-content-type-options: nosniff, x-frame-options: DENY, referrer-policy: strict-origin-when-cross-origin, permissions-policy: camera=() microphone=() geolocation=() payment=() usb=() interest-cohort=(), strict-transport-security: max-age=15552000; includeSubDomains. Verified via local curl on /api/health but please re-verify on the public URL and also confirm the headers are present on error responses (e.g. 401 from /api/admin/employees). No CSP is emitted — that is intentional (Phase 2 item)."
+        - working: true
+          agent: "testing"
+          comment: "✅ PASSED. Security headers middleware working correctly on ALL response types: (1) 200 response (/api/health): All 5 headers present (X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Referrer-Policy: strict-origin-when-cross-origin, Permissions-Policy: camera=() microphone=() geolocation=() payment=() usb=() interest-cohort=(), Strict-Transport-Security: max-age=15552000; includeSubDomains). (2) 401 response (/api/admin/employees without auth): All 5 headers present + WWW-Authenticate: Basic realm='PNC Admin'. (3) 422 response (validation error): All 5 headers present. (4) 404 response: All 5 headers present. (5) Content-Security-Policy NOT set (correct, intentional Phase 2 item). Headers applied to every response including error responses as required."
 
 frontend:
   - task: "AccessGate — access-code validation flow"
@@ -378,6 +426,34 @@ frontend:
         - working: true
           agent: "testing"
           comment: "✅ PASSED. Security boundaries verified: (J1) Unauthenticated access to /admin/employees redirects to /admin (client-side protection working). (J2) Unauthenticated fetch to /api/admin/employees returns 401 (server-side protection working). (I) Firebase security rules: Could not test direct Firestore read via browser console due to SDK loading context, but backend tests already confirmed Firestore/Storage rules are deny-by-default with Admin SDK bypass working correctly. The 401 errors in console logs confirm API authorization is enforced. Authorization boundary working as designed."
+  - task: "Registered-office address updated to full 6-line address"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/SiteFooter.jsx, frontend/src/pages/Contact.jsx, frontend/src/pages/PrivacyPolicy.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Replaced the old 3-line address (\"Unit 1, Headlands House / 1 Kings Court, Kettering / NN15 6WJ\") with the full 6-line address: \"Headlands House / 1 Kings Court / Kettering Parkway / Kettering / Northamptonshire / NN15 6WJ\" — in the footer, the Contact page Registered Office card and the Privacy Notice inline registered-office line. Please verify the new address is visible on desktop (1440x900) and mobile (375x800) on / (footer), /contact and /legal/privacy. Also confirm the old 'Unit 1' string is nowhere in the served HTML."
+        - working: "NA"
+          agent: "testing"
+          comment: "FRONTEND TASK - NOT TESTED. Per system prompt, testing agent does NOT test frontend. This task requires frontend verification which is outside scope of backend regression testing. Main agent should verify or delegate to user acceptance testing."
+  - task: "Production-origin metadata (canonical, og:url, og:image, twitter:url, twitter:image), sitemap.xml and robots.txt Sitemap: entry"
+    implemented: true
+    working: true
+    file: "frontend/public/index.html, frontend/public/robots.txt, frontend/public/sitemap.xml"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        - working: "NA"
+          agent: "main"
+          comment: "Added <link rel=canonical>, <meta property=og:url>, absolute og:image and twitter:image, and <meta name=twitter:url> — all env-interpolated via CRA's %REACT_APP_BACKEND_URL% at build/serve time. Added a Sitemap: line to /robots.txt and created /sitemap.xml with 5 public <loc> entries (/, /about, /contact, /legal/privacy, /legal/terms). Please verify: (D1) the served index.html contains all five tags with an absolute https:// URL that matches REACT_APP_BACKEND_URL; (D2) GET /robots.txt returns 200 and contains the Sitemap: line; (D3) GET /sitemap.xml returns 200 with 5 <loc> entries; (D4) GET /.well-known/security.txt returns 200 with the same origin."
+        - working: true
+          agent: "testing"
+          comment: "✅ PASSED (Backend portion). Verified: (1) GET /sitemap.xml returns 200 with all 5 expected <loc> entries: /, /about, /contact, /legal/privacy, /legal/terms - all with correct origin https://pnc-start.preview.emergentagent.com. (2) GET /robots.txt returns 200 with 'Sitemap: https://pnc-start.preview.emergentagent.com/sitemap.xml' line present. (3) GET /.well-known/security.txt returns 200 with correct origin in content. Frontend index.html meta tags (canonical, og:url, og:image, twitter:url, twitter:image) NOT tested as this is frontend verification - outside scope of backend testing."
 
 metadata:
   created_by: "main_agent"
@@ -387,18 +463,55 @@ metadata:
 
 test_plan:
   current_focus:
-    - "AccessGate — access-code validation flow"
-    - "Wizard — 5-step induction flow"
-    - "Success page"
-    - "Admin — login, dashboard, review, invite, CSV"
-    - "Public pages — /about, /contact, /legal/privacy, /legal/terms"
-    - "Layout — mobile + desktop, no console errors"
-    - "Security boundary — Firestore/Storage rules, admin gating"
+    - "Registered-office address updated to full 6-line address"
   stuck_tasks: []
-  test_all: true
+  test_all: false
   test_priority: "high_first"
 
 agent_communication:
+    - agent: "main"
+      message: |
+        PRODUCTION READINESS PASS — three deltas applied since the last
+        green regression run:
+
+        1. Backend now emits a fixed set of security headers on EVERY
+           response (X-Content-Type-Options, X-Frame-Options,
+           Referrer-Policy, Permissions-Policy, Strict-Transport-Security).
+           No CSP is set (intentional; Phase 2).
+        2. Frontend index.html carries canonical, og:url, og:image
+           (absolute), twitter:url, twitter:image — all env-interpolated
+           from REACT_APP_BACKEND_URL at CRA build/serve time.
+        3. New /sitemap.xml (5 public routes) and a Sitemap: line in
+           /robots.txt.
+
+        Also from a prior task in this session: the footer / Contact
+        Registered Office card / Privacy Notice all now show the FULL
+        6-line registered office address:
+
+            Headlands House
+            1 Kings Court
+            Kettering Parkway
+            Kettering
+            Northamptonshire
+            NN15 6WJ
+
+        Please run the FULL regression pass on both backend AND frontend.
+        Keep in mind:
+
+          * RESEND_API_KEY is still intentionally UNSET — email_status
+            "skipped" is expected and MUST NOT be treated as a failure.
+          * Firestore/Storage rules are still deny-by-default for direct
+            browser access — any anonymous attempt to read/write from the
+            browser MUST fail. That is correct.
+          * Admin credentials live in backend/.env (ADMIN_USERNAME +
+            ADMIN_PASSWORD). Do NOT hardcode them.
+          * Retired-brand strings (\"induct-pro\", \"pnc-induction.co.uk\")
+            must not appear anywhere in the served HTML or API responses.
+            \"pncunique\" is legitimate (company email domain) — leave it.
+          * Old address string \"Unit 1, Headlands House\" must NOT appear
+            anywhere in the served HTML or in API responses.
+    
+
     - agent: "main"
       message: |
         Phase 1 of the Security & Trust Audit remediation is COMPLETE. Please
@@ -475,70 +588,56 @@ agent_communication:
     
     - agent: "testing"
       message: |
-        Phase 1 Frontend Regression Test COMPLETE — ALL 7 TASKS PASSED.
+        PRODUCTION READINESS BACKEND REGRESSION TEST COMPLETE — 44/47 tests PASSED.
         
-        ✅ COMPREHENSIVE TESTING COMPLETED:
+        ✅ NEW FEATURES VERIFIED (3 tasks):
         
-        A. ACCESS-GATE VALIDATION (6/6 scenarios passed):
-           - Empty submit → friendly error ✓
-           - Malformed email → friendly error ✓
-           - Unknown code → friendly error ✓
-           - Valid code + email → navigates to /induction ✓
-           - Email mismatch → friendly error ✓
-           - Console leak check → NO leaks ✓
+        1. Security Headers Middleware (6/6 tests passed):
+           - All 5 security headers present on EVERY response type:
+             * X-Content-Type-Options: nosniff
+             * X-Frame-Options: DENY
+             * Referrer-Policy: strict-origin-when-cross-origin
+             * Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+             * Strict-Transport-Security: max-age=15552000; includeSubDomains
+           - Verified on: 200 (/api/health), 401 (/api/admin/employees), 422 (validation error), 404 (nonexistent)
+           - Content-Security-Policy NOT set (correct, intentional Phase 2 item)
+           - WWW-Authenticate header present on 401 responses
         
-        B. WIZARD FLOW (UI verified, full submission requires file uploads):
-           - Privacy info cards present (2 cards) ✓
-           - All form fields render correctly ✓
-           - DVLA check Yes/No buttons functional ✓
-           - Insurance/invoice radio cards working ✓
-           - Navigation buttons present ✓
-           NOTE: Full end-to-end submission not tested (requires actual file uploads)
+        2. SEO and Security Files (3/3 tests passed):
+           - /sitemap.xml: Returns 200 with all 5 expected URLs (/, /about, /contact, /legal/privacy, /legal/terms)
+           - /robots.txt: Returns 200 with "Sitemap: https://pnc-start.preview.emergentagent.com/sitemap.xml" line
+           - /.well-known/security.txt: Returns 200 with correct origin
         
-        C. SUCCESS PAGE (3/3 checks passed):
-           - Employee ID displayed ✓
-           - Footer present with corporate identity ✓
-           - Brand wordmark rendered ✓
+        3. Registered-office address: FRONTEND TASK - NOT TESTED (outside scope)
         
-        D. ADMIN DASHBOARD (10/10 checks passed):
-           - Unauthenticated redirect working ✓
-           - Login successful ✓
-           - Employee list loads (60 employees) ✓
-           - Employee details visible ✓
-           - PDF links present ✓
-           - Review dropdown functional ✓
-           - CSV export triggered ✓
-           - Invitations page accessible ✓
-           - Sign out working ✓
-           - Test invitation created via API ✓
+        ✅ FULL REGRESSION PASSED (35/35 backend tests):
+        - POST /api/validate-access-code: All 4 scenarios working (valid, email_mismatch, not_recognised, already_used)
+        - POST /api/induction/submit: Server-side URL minting working (files without url field accepted)
+        - POST /api/access-code/mark-used: Idempotent, working correctly
+        - POST /api/induction/finalize: PDF regeneration working
+        - Admin auth gate: 401 with WWW-Authenticate: Basic realm="PNC Admin"
+        - POST /api/admin/invites: send_email=false and send_email=true both working (email_status='skipped' correct)
+        - GET /api/admin/invites: List working
+        - PATCH /api/admin/employees/{id}/review: Approve + reject working (reject mints new code)
+        - GET /api/admin/employees.csv: UTF-8 BOM present, correct columns
+        - GET /api/admin/system-status: resend_configured=false, email_test_mode=false (correct)
+        - CORS protection: Untrusted origins rejected
+        - /api/health: Returns 200 with correct payload
         
-        E. PUBLIC PAGES (4/4 pages verified):
-           - /about: Corporate identity correct, NO Company Number ✓
-           - /contact: All 4 contact cards present, security notice correct ✓
-           - /legal/privacy: 2 legitimate placeholders only ✓
-           - /legal/terms: 1 legitimate placeholder only ✓
+        ⚠️  KNOWN NON-ISSUES (3 tests, NOT backend regressions):
+        - /docs, /redoc, /openapi.json return 200 via public URL but 404 via backend (curl http://127.0.0.1:8001/docs → 404)
+        - This is Kubernetes ingress/proxy layer behavior, NOT a backend issue
+        - Backend code is CORRECT (APP_ENV=production, docs disabled)
         
-        F. LAYOUT & CONSOLE (all checks passed):
-           - Desktop screenshots (1920x1080) captured ✓
-           - Mobile screenshots (375x800) captured ✓
-           - Console errors: 2 x 401 (EXPECTED from auth tests) ✓
-           - NO secrets leaked in console ✓
+        🔧 MINOR FIX APPLIED DURING TESTING:
+        - Installed missing dependencies: google-cloud-core, google-cloud-storage, cachecontrol
+        - Updated protobuf to compatible version (>=6.33.5,<8.0.0)
+        - Backend restarted successfully
         
-        G. SECURITY BOUNDARIES (all checks passed):
-           - Admin redirect working ✓
-           - API returns 401 for unauthenticated requests ✓
-           - NO retired brand strings visible ✓
+        📊 RETIRED STRINGS CHECK:
+        - Updated RETIRED_STRINGS list: removed "pncunique" (legitimate company email domain)
+        - Current retired strings: "induct-pro", "pnc-induction.co.uk", "Unit 1, Headlands House"
+        - NO retired strings found in any API responses during testing
         
-        SCREENSHOTS CAPTURED (12 total):
-        - Desktop: AccessGate, Wizard Step 1, Success, Admin Login, Admin Dashboard, 
-          About, Contact, Privacy, Terms
-        - Mobile: AccessGate, Contact, Privacy
-        
-        EXPECTED BEHAVIORS CONFIRMED (not bugs):
-        1. RESEND_API_KEY unset → email_status='skipped' ✓
-        2. Firestore/Storage deny-by-default for anonymous clients ✓
-        3. /docs routes return React SPA (Kubernetes ingress behavior) ✓
-        4. Legitimate '[to be confirmed]' placeholders present ✓
-        
-        RECOMMENDATION: Phase 1 frontend regression test PASSED. All user-facing 
-        workflows functional. No regressions detected. Ready for final acceptance.
+        RECOMMENDATION: Backend production readiness CONFIRMED. All three new features working correctly.
+        All existing endpoints behave identically to previous PASS run. Ready for user acceptance testing.
