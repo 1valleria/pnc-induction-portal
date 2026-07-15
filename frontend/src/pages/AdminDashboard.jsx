@@ -239,7 +239,14 @@ function Cell({ col, value, row, onChangeReview }) {
         <div className="flex items-center gap-1.5 flex-wrap">
           <select
             value={v}
-            onChange={(e) => onChangeReview(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              // No-op if the value didn't actually change (defensive; browsers
+              // sometimes fire change with the same value on programmatic
+              // resets after failed PATCHes).
+              if (next === v) return;
+              onChangeReview(next, v);
+            }}
             className={`text-[11px] font-medium px-2 py-1 rounded-full border focus:outline-none focus:ring-2 focus:ring-[#166534]/30 ${REVIEW_TONE[v] || REVIEW_TONE.pending_review}`}
             data-testid="admin-row-review-select"
           >
@@ -337,38 +344,60 @@ export default function AdminDashboard() {
   }, [items, q]);
 
   /** Triggered by the inline review dropdown.
-   *   - "pending_review" → set directly with no email (just resets state).
-   *   - "approved" / "rejected" → open ReviewActionModal; the modal calls
+   *   - Every status change (including "pending_review") now goes through
+   *     ReviewActionModal so nothing can happen silently. The modal calls
    *     submitReview() once HR confirms.
    */
-  const onReviewSelect = (employeeId, review_status) => {
-    if (review_status === "pending_review") {
-      submitReview({ employeeId, review_status });
-      return;
-    }
+  const onReviewSelect = (employeeId, review_status, currentValue) => {
     const rec = items.find((r) => r.employee_id === employeeId);
     setReviewModal({
       employee_id: employeeId,
       mode: review_status,
       name: rec?.full_name,
       email: rec?.email || rec?.invited_email,
+      // Snapshot the DB value the admin saw BEFORE picking the new option.
+      // The backend uses this for optimistic-concurrency protection.
+      if_previous_status: currentValue || rec?.review_status || "pending_review",
     });
   };
 
-  /** Actually submit the review (called both for "pending_review" picks and
-   *  modal confirmations). Returns the backend response so the modal can
-   *  reveal the freshly minted access code after a rejection. */
-  const submitReview = async ({ employeeId, review_status, review_note, manager_email, manager_count }) => {
+  /** Actually submit the review (called from ReviewActionModal on confirm).
+   *  Returns the backend response so the modal can reveal the freshly minted
+   *  access code after a rejection.
+   */
+  const submitReview = async ({ employeeId, review_status, review_note, manager_email, manager_count, if_previous_status }) => {
     try {
       const body = { review_status };
       if (review_note !== undefined) body.review_note = review_note;
       if (manager_email) body.manager_email = manager_email;
+      if (if_previous_status) body.if_previous_status = if_previous_status;
       const res = await adminFetch(`/api/admin/employees/${employeeId}/review`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      // 409 = optimistic-concurrency conflict. Refresh and abort.
+      if (res.status === 409) {
+        toast.error(
+          "This record was changed by someone else since you loaded the dashboard. Refreshing…"
+        );
+        load();
+        return undefined;
+      }
+      // 4xx / 5xx other than 409 — throw so the catch below surfaces the error.
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       const data = await res.json();
+
+      // If the backend short-circuited (idempotent no-op) it echoes back the
+      // existing state with idempotent:true and skipped_no_change. Treat as
+      // success but tell HR nothing changed.
+      if (data.idempotent) {
+        toast.info("Status unchanged — no email sent.");
+        setReviewModal(null);
+        return data;
+      }
       setItems((prev) =>
         prev.map((r) =>
           r.employee_id === employeeId
@@ -643,6 +672,7 @@ export default function AdminDashboard() {
             review_note,
             manager_email,
             manager_count,
+            if_previous_status: reviewModal.if_previous_status,
           });
         }}
       />

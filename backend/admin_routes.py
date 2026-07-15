@@ -190,6 +190,13 @@ class ReviewIn(BaseModel):
     # or an explicit list of emails. Backend normalises to a deduped list.
     manager_email: str | None = Field(default=None, max_length=2000)
     manager_emails: list[str] | None = Field(default=None, max_length=20)
+    # Optimistic-concurrency guard. When the frontend sends this, the server
+    # rejects with 409 if the current DB state doesn't match. Optional so
+    # existing callers (curl, tests, admin scripts) keep working; the React
+    # dashboard is expected to send it on every PATCH.
+    if_previous_status: str | None = Field(
+        default=None, pattern="^(pending_review|approved|rejected)$"
+    )
 
 
 def _parse_manager_emails(raw_str: str | None, raw_list: list[str] | None) -> list[str]:
@@ -342,6 +349,52 @@ async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str,
         raise HTTPException(status_code=404, detail="employee_summary not found")
     rec = snap.to_dict() or {}
     previous = rec.get("review_status")
+
+    # ------------------------------------------------------------------
+    # Optimistic-concurrency guard. If the client sent if_previous_status,
+    # reject the write when the current DB value doesn't match — this stops
+    # a stale second tab / second admin from silently overwriting a fresh
+    # review decision they can't see.
+    # ------------------------------------------------------------------
+    if payload.if_previous_status is not None and previous != payload.if_previous_status:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "review_status_conflict",
+                "message": (
+                    "The review status of this record has changed since you loaded "
+                    "the dashboard. Refresh and try again."
+                ),
+                "expected_previous_status": payload.if_previous_status,
+                "current_review_status": previous,
+            },
+        )
+
+    # ------------------------------------------------------------------
+    # Idempotency short-circuit. If the requested review_status is the
+    # same as the current DB value AND there is no rejection note change,
+    # do NOTHING — no writes, no emails, no audit-log entries. This makes
+    # duplicate PATCHes (double-click, retried request, dashboard-refresh
+    # race) safe. Rejection notes CAN legitimately change on a re-reject
+    # so we only short-circuit when the state AND note are unchanged.
+    # ------------------------------------------------------------------
+    if (
+        previous == payload.review_status
+        and (
+            payload.review_note is None
+            or payload.review_note == rec.get("review_note")
+        )
+    ):
+        return {
+            "employee_id": employee_id,
+            "review_status": previous,
+            "review_updated_at": rec.get("review_updated_at"),
+            "reviewed_at": rec.get("reviewed_at"),
+            "email_status": "skipped_no_change",
+            "manager_email_status": "skipped_no_change",
+            "idempotent": True,
+        }
+
     now_iso = datetime.now(timezone.utc).isoformat()
     update: dict[str, Any] = {
         "review_status": payload.review_status,
@@ -350,6 +403,26 @@ async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str,
     }
     if payload.review_note is not None:
         update["review_note"] = payload.review_note
+
+    # ------------------------------------------------------------------
+    # Append-only audit history. Records every real status transition so
+    # HR (or Ops) can always reconstruct who moved which record where.
+    # Uses firestore.ArrayUnion so concurrent writes never lose entries.
+    # Kept as a Firestore native ArrayUnion — not a plain list assignment —
+    # so this survives multi-writer scenarios without a transaction.
+    # ------------------------------------------------------------------
+    from google.cloud import firestore as gcf  # noqa: E402  (lazy: keeps import optional in tests)
+    history_entry = {
+        "from": previous,
+        "to": payload.review_status,
+        "at": now_iso,
+        "admin": os.environ.get("ADMIN_USERNAME") or "admin",
+        "note_changed": (
+            payload.review_note is not None
+            and payload.review_note != rec.get("review_note")
+        ),
+    }
+    update["review_history"] = gcf.ArrayUnion([history_entry])
 
     # Rejection-only: mint a fresh access code so the inductee can resubmit.
     new_access_code: str | None = None
@@ -378,6 +451,13 @@ async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str,
         update["resubmission_access_code_id"] = new_access_code_id
 
     doc_ref.update(update)
+
+    # The response echoes the applied update to the frontend so it can refresh
+    # optimistically without a second GET. Firestore's ArrayUnion sentinel is
+    # not JSON-serialisable, so replace it with a plain snapshot of the
+    # history entry we just appended.
+    response_update: dict[str, Any] = {k: v for k, v in update.items() if k != "review_history"}
+    response_update["review_history_appended"] = history_entry
 
     # Side-effect: notify inductee on approval / rejection transitions.
     email_status: str | None = None
@@ -409,7 +489,7 @@ async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str,
     response: dict[str, Any] = {
         "employee_id": employee_id,
         "email_status": email_status,
-        **update,
+        **response_update,
     }
 
     # Manager-notification side-effect. Always after the inductee email so a
@@ -476,7 +556,14 @@ async def update_review_status(employee_id: str, payload: ReviewIn) -> dict[str,
             update["manager_emails"] = manager_emails_list
             update["manager_email"] = manager_email_joined
             update["manager_notified_at"] = now_iso2
-            response.update(update)
+            response_update["manager_emails"] = manager_emails_list
+            response_update["manager_email"] = manager_email_joined
+            response_update["manager_notified_at"] = now_iso2
+            response.update({
+                "manager_emails": manager_emails_list,
+                "manager_email": manager_email_joined,
+                "manager_notified_at": now_iso2,
+            })
         except EmailSendError:
             manager_status = "failed"
         response["manager_emails"] = manager_emails_list

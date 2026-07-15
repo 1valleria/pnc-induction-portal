@@ -40,16 +40,19 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
   if (!open) return null;
 
   const isReject = mode === "rejected";
+  const isReset  = mode === "pending_review";
   const showResubmit = isReject && resubmitResult;
   const title = showResubmit
     ? "Rejection sent · new access code"
     : isReject
     ? "Reject induction"
+    : isReset
+    ? "Reset to Pending Review"
     : "Approve induction";
-  const accent = isReject ? "#B91C1C" : "#166534";
-  const accentBg = isReject ? "#FEF2F2" : "#F0FDF4";
-  const accentBorder = isReject ? "#FECACA" : "#BBF7D0";
-  const Icon = showResubmit ? ShieldCheck : isReject ? AlertTriangle : ShieldCheck;
+  const accent = isReject ? "#B91C1C" : isReset ? "#B45309" : "#166534";
+  const accentBg = isReject ? "#FEF2F2" : isReset ? "#FFFBEB" : "#F0FDF4";
+  const accentBorder = isReject ? "#FECACA" : isReset ? "#FDE68A" : "#BBF7D0";
+  const Icon = showResubmit ? ShieldCheck : (isReject || isReset) ? AlertTriangle : ShieldCheck;
   const headerAccent = showResubmit
     ? { bg: "#F0FDF4", border: "#BBF7D0", color: "#166534" }
     : { bg: accentBg, border: accentBorder, color: accent };
@@ -66,23 +69,26 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
   const handleSubmit = async (e) => {
     e?.preventDefault?.();
     if (!canSubmit || sending) return;
-    const emails = parseManagerEmails(managerEmail);
-    const invalid = emails.filter((addr) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr));
-    if (invalid.length > 0) {
-      setManagerError(
-        invalid.length === 1
-          ? `Invalid email address: ${invalid[0]}`
-          : `Invalid email addresses: ${invalid.join(", ")}`
-      );
-      return;
+    // Reset-to-pending path does NOT need manager email — skip validation.
+    const emails = isReset ? [] : parseManagerEmails(managerEmail);
+    if (!isReset) {
+      const invalid = emails.filter((addr) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr));
+      if (invalid.length > 0) {
+        setManagerError(
+          invalid.length === 1
+            ? `Invalid email address: ${invalid[0]}`
+            : `Invalid email addresses: ${invalid.join(", ")}`
+        );
+        return;
+      }
     }
     setManagerError(null);
     setSending(true);
     try {
       const result = await onConfirm({
-        review_status: isReject ? "rejected" : "approved",
+        review_status: isReject ? "rejected" : isReset ? "pending_review" : "approved",
         review_note: isReject ? note.trim() : undefined,
-        manager_email: emails.join(", ") || undefined,
+        manager_email: (!isReset && emails.length > 0) ? emails.join(", ") : undefined,
         manager_count: emails.length,
       });
       if (isReject && result && result.new_access_code) {
@@ -229,6 +235,16 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
                 On submit we&apos;ll mark the record <b>Rejected</b>, generate a new access code and send the email immediately.
               </div>
             </>
+          ) : isReset ? (
+            <>
+              <p className="text-sm text-[#1C1917] leading-relaxed">
+                This record will be reset back to <b>Pending Review</b>. No email will be sent to the inductee or the manager. Use this only if you need to un-do a previous approval or rejection.
+              </p>
+              <div className="rounded-lg bg-[#FFFBEB] border border-[#FDE68A] text-[#B45309] text-xs p-3 flex items-start gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5" />
+                An entry will be added to the audit history recording that you moved the record back to Pending.
+              </div>
+            </>
           ) : (
             <>
               <p className="text-sm text-[#1C1917] leading-relaxed">
@@ -277,10 +293,16 @@ export default function ReviewActionModal({ open, mode, employeeName, employeeEm
                 disabled={!canSubmit || sending}
                 data-testid="review-modal-confirm"
                 className="h-10 px-4 rounded-lg text-white text-sm font-medium inline-flex items-center gap-1.5 disabled:opacity-60"
-                style={{ background: isReject ? "#B91C1C" : "#166534" }}
+                style={{ background: isReject ? "#B91C1C" : isReset ? "#B45309" : "#166534" }}
               >
                 <Send className="h-4 w-4" />
-                {sending ? "Sending…" : isReject ? "Reject and Send Email" : "Approve and Send Email"}
+                {sending
+                  ? "Sending…"
+                  : isReject
+                  ? "Reject and Send Email"
+                  : isReset
+                  ? "Reset to Pending"
+                  : "Approve and Send Email"}
               </button>
             </>
           )}
